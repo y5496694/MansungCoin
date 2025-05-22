@@ -9,10 +9,10 @@
     <!-- Visualization & Content Choices:
         - Wallet: KRW Balance (Stat), Asset Summary (Stat), Asset Allocation (Chart.js Donut). Data from Firestore.
         - Transfers: Form. Transactions logged to Firestore.
-        - Stock Market: Tabs per stock. Price/Change/Volume (Stats from Firestore), Price History (Chart.js Line from Firestore), Buy/Sell Forms (updates Firestore). AI Stock Analysis (Gemini API).
-        - Good Deeds: Submission Form, Status List (data from Firestore). AI Deed Story Expansion (Gemini API).
+        - Stock Market: Tabs per stock. Price/Change/Volume (Stats from Firestore), Price History (Chart.js Line from Firestore with time filters), Buy/Sell Forms (updates Firestore). AI Stock Analysis (Gemini API). Gold price via external API.
+        - Good Deeds: Submission Form (once per day check), Status List (data from Firestore). AI Deed Story Expansion (Gemini API).
         - Transactions: Table/List with filters (data from Firestore).
-        - Admin: Student list with details, placeholder for balance adjustment.
+        - Admin: Student list, stock fluctuation settings, stock price manual update.
         - All interactions via vanilla JS. Data stored in Firestore. NO SVG/Mermaid. -->
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -31,13 +31,13 @@
         .chart-container {
             position: relative;
             width: 100%;
-            max-width: 600px; /* 기본 최대 너비 */
+            max-width: 600px; 
             margin-left: auto;
             margin-right: auto;
-            height: 300px; /* 기본 높이 */
-            max-height: 400px; /* 최대 높이 */
+            height: 300px; 
+            max-height: 400px; 
         }
-        @media (min-width: 768px) { /* md 브레이크포인트 */
+        @media (min-width: 768px) { 
             .chart-container {
                 height: 350px;
             }
@@ -47,16 +47,20 @@
             color: #0d9488;
             font-weight: 600;
         }
+        .time-filter-btn.active {
+            background-color: #0d9488; /* teal-600 */
+            color: white;
+        }
         .modal, .ai-modal, .admin-modal {
-            display: none; /* Hidden by default */
-            position: fixed; /* Stay in place */
-            z-index: 100; /* Sit on top */
+            display: none; 
+            position: fixed; 
+            z-index: 100; 
             left: 0;
             top: 0;
-            width: 100%; /* Full width */
-            height: 100%; /* Full height */
-            overflow: auto; /* Enable scroll if needed */
-            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.4); 
         }
         .modal-content, .ai-modal-content, .admin-modal-content {
             background-color: #fefefe;
@@ -75,16 +79,16 @@
             right: 15px;
             font-size: 28px;
             font-weight: bold;
+            cursor: pointer; 
         }
         .close-button:hover,
         .close-button:focus {
             color: black;
             text-decoration: none;
-            cursor: pointer;
         }
         .loading-spinner {
-            border: 4px solid #f3f3f3; /* Light grey */
-            border-top: 4px solid #3498db; /* Blue */
+            border: 4px solid #f3f3f3; 
+            border-top: 4px solid #3498db; 
             border-radius: 50%;
             width: 30px;
             height: 30px;
@@ -240,14 +244,14 @@
 
             <section id="deeds" class="hidden space-y-6">
                 <h2 class="text-3xl font-semibold text-teal-800">🌟 나의 선행</h2>
-                <p class="text-stone-600">착한 일을 하고 내용을 기록하면 용돈을 받을 수 있어요! (1건당 1,000원)</p>
+                <p class="text-stone-600">착한 일을 하고 내용을 기록하면 용돈을 받을 수 있어요! (1건당 1,000원, 하루 1번)</p>
                 <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg mx-auto">
                     <form id="deedForm" class="space-y-4">
                         <div>
                             <label for="deedDescription" class="block text-sm font-medium text-stone-700">선행 내용</label>
                             <textarea id="deedDescription" name="deedDescription" rows="4" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="예: 친구의 숙제를 도와주었습니다."></textarea>
                         </div>
-                        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">선행 등록하기</button>
+                        <button type="submit" id="submitDeedBtn" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">선행 등록하기</button>
                     </form>
                 </div>
                 <div class="mt-8 bg-white p-6 rounded-xl shadow-lg">
@@ -309,6 +313,9 @@
                             <input type="number" id="adminNewPrice" placeholder="새 가격" class="p-2 border rounded w-full mb-2">
                             <button id="adminUpdatePriceBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg text-sm w-full">가격 업데이트</button>
                         </div>
+                        <div id="adminStockFluctuationSettings" class="mt-6">
+                            <h4 class="text-md font-semibold text-red-500 mb-1">주식 변동폭 설정</h4>
+                            </div>
                     </div>
                      <div class="bg-white p-6 rounded-xl shadow-lg">
                         <h3 class="text-xl font-semibold text-red-600 mb-2">선행 승인 관리 (구현 예정)</h3>
@@ -321,30 +328,30 @@
 
     <div id="infoModal" class="modal">
         <div class="modal-content">
-            <span class="close-button" onclick="closeInfoModal()">&times;</span>
+            <span id="closeInfoModalBtn" class="close-button">&times;</span>
             <h3 id="modalTitle" class="text-xl font-semibold mb-2">알림</h3>
             <p id="modalMessage" class="text-stone-700 whitespace-pre-wrap"></p>
             <div class="mt-4 text-right">
-                <button onclick="closeInfoModal()" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg">확인</button>
+                <button id="confirmInfoModalBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg">확인</button>
             </div>
         </div>
     </div>
 
     <div id="aiContentModal" class="ai-modal">
         <div class="ai-modal-content">
-            <span class="close-button" onclick="closeAiModal()">&times;</span>
+            <span id="closeAiModalBtn" class="close-button">&times;</span>
             <h3 id="aiModalTitle" class="text-2xl font-bold text-purple-600 mb-3">✨ AI 생성 내용</h3>
             <div id="aiLoadingSpinner" class="loading-spinner hidden"></div>
             <p id="aiModalMessage" class="text-stone-700 whitespace-pre-wrap text-lg leading-relaxed"></p>
             <div class="mt-6 text-right">
-                <button onclick="closeAiModal()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg">닫기</button>
+                <button id="confirmAiModalBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg">닫기</button>
             </div>
         </div>
     </div>
     
     <div id="adminAdjustBalanceModal" class="admin-modal">
         <div class="admin-modal-content">
-            <span class="close-button" onclick="closeAdminAdjustBalanceModal()">&times;</span>
+            <span id="closeAdminAdjustBalanceModalBtn" class="close-button">&times;</span>
             <h3 id="adminAdjustBalanceModalTitle" class="text-xl font-semibold text-red-600 mb-3">학생 잔액 조정</h3>
             <p id="adminAdjustBalanceStudentInfo" class="text-sm text-stone-600 mb-3"></p>
             <div>
@@ -356,7 +363,7 @@
                 <input type="text" id="adminAdjustmentReason" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500" placeholder="예: 특별 보상">
             </div>
             <div class="mt-4 text-right space-x-2">
-                <button onclick="closeAdminAdjustBalanceModal()" class="bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg">취소</button>
+                <button id="cancelAdminAdjustBalanceBtn" class="bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg">취소</button>
                 <button id="adminConfirmAdjustBalanceBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">잔액 조정</button>
             </div>
         </div>
@@ -389,7 +396,10 @@
         serverTimestamp, 
         increment,
         runTransaction,
-        Timestamp
+        Timestamp,
+        arrayUnion,
+        orderBy,
+        limit
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -402,7 +412,7 @@
     };
 
     // Initialize Firebase
-    const firebaseApp = initializeApp(firebaseConfig); // Renamed to avoid conflict
+    const firebaseApp = initializeApp(firebaseConfig); 
     const auth = getAuth(firebaseApp);
     const db = getFirestore(firebaseApp);
 
@@ -414,6 +424,9 @@
     let unsubscribeTransactionsListener = null;
     let unsubscribeDeedsListener = null;
     let unsubscribeStockListeners = {};
+    let stockUpdateInterval = null;
+    let goldUpdateInterval = null;
+    const MAX_HISTORY_LENGTH = 200; 
 
 
     // --- Chart Instances ---
@@ -429,35 +442,55 @@
         const d = new Date(date);
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     };
+     const isSameDay = (date1, date2) => {
+        if (!date1 || !date2) return false;
+        const d1 = (date1 instanceof Timestamp) ? date1.toDate() : new Date(date1);
+        const d2 = (date2 instanceof Timestamp) ? date2.toDate() : new Date(date2);
+        return d1.getFullYear() === d2.getFullYear() &&
+               d1.getMonth() === d2.getMonth() &&
+               d1.getDate() === d2.getDate();
+    };
+
 
     // --- Modal Functions ---
     const infoModal = document.getElementById('infoModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalMessage = document.getElementById('modalMessage');
+    const closeInfoModalBtn = document.getElementById('closeInfoModalBtn');
+    const confirmInfoModalBtn = document.getElementById('confirmInfoModalBtn');
+
     const aiContentModal = document.getElementById('aiContentModal');
     const aiModalTitle = document.getElementById('aiModalTitle');
     const aiModalMessage = document.getElementById('aiModalMessage');
     const aiLoadingSpinner = document.getElementById('aiLoadingSpinner');
+    const closeAiModalBtn = document.getElementById('closeAiModalBtn');
+    const confirmAiModalBtn = document.getElementById('confirmAiModalBtn');
+    
     const adminAdjustBalanceModal = document.getElementById('adminAdjustBalanceModal');
     const adminAdjustBalanceModalTitle = document.getElementById('adminAdjustBalanceModalTitle');
     const adminAdjustBalanceStudentInfo = document.getElementById('adminAdjustBalanceStudentInfo');
     const adminAdjustmentAmountInput = document.getElementById('adminAdjustmentAmount');
     const adminAdjustmentReasonInput = document.getElementById('adminAdjustmentReason');
     const adminConfirmAdjustBalanceBtn = document.getElementById('adminConfirmAdjustBalanceBtn');
+    const closeAdminAdjustBalanceModalBtn = document.getElementById('closeAdminAdjustBalanceModalBtn');
+    const cancelAdminAdjustBalanceBtn = document.getElementById('cancelAdminAdjustBalanceBtn');
     let studentIdToAdjust = null;
 
 
     function showInfoModal(title, message) {
+        console.log("Showing info modal:", title);
         modalTitle.textContent = title;
         modalMessage.textContent = message;
         infoModal.style.display = 'block';
     }
 
     function closeInfoModal() {
+        console.log("Closing info modal");
         infoModal.style.display = 'none';
     }
     
     function showAiModal(title) {
+        console.log("Showing AI modal:", title);
         aiModalTitle.textContent = title;
         aiModalMessage.textContent = '';
         aiLoadingSpinner.classList.remove('hidden');
@@ -470,11 +503,13 @@
     }
 
     function closeAiModal() {
+        console.log("Closing AI modal");
         aiContentModal.style.display = 'none';
         aiLoadingSpinner.classList.add('hidden');
     }
     
     function showAdminAdjustBalanceModal(studentId, studentName, currentBalance) {
+        console.log("Showing admin adjust balance modal for:", studentName);
         studentIdToAdjust = studentId;
         adminAdjustBalanceModalTitle.textContent = `${studentName} 학생 잔액 조정`;
         adminAdjustBalanceStudentInfo.textContent = `현재 잔액: ${formatCurrency(currentBalance)}`;
@@ -484,9 +519,17 @@
     }
 
     function closeAdminAdjustBalanceModal() {
+        console.log("Closing admin adjust balance modal");
         adminAdjustBalanceModal.style.display = 'none';
         studentIdToAdjust = null;
     }
+
+    closeInfoModalBtn.addEventListener('click', closeInfoModal);
+    confirmInfoModalBtn.addEventListener('click', closeInfoModal);
+    closeAiModalBtn.addEventListener('click', closeAiModal);
+    confirmAiModalBtn.addEventListener('click', closeAiModal);
+    closeAdminAdjustBalanceModalBtn.addEventListener('click', closeAdminAdjustBalanceModal);
+    cancelAdminAdjustBalanceBtn.addEventListener('click', closeAdminAdjustBalanceModal);
 
 
     window.onclick = function(event) {
@@ -526,18 +569,22 @@
     const authErrorEl = document.getElementById('authError');
     const registerAuthErrorEl = document.getElementById('registerAuthError');
     const adminStudentListEl = document.getElementById('adminStudentList');
+    const adminStockFluctuationSettingsEl = document.getElementById('adminStockFluctuationSettings');
 
 
     // --- Navigation ---
     function showSection(sectionId, forceShow = false) {
+        console.log("Attempting to show section:", sectionId, "Force show:", forceShow, "Current Auth User:", currentAuthUser);
         if (!currentAuthUser && !forceShow && sectionId !== 'login' && sectionId !== 'register') {
+            console.log("User not authenticated, redirecting to login.");
             showSection('login', true); 
             return;
         }
         
         if (sectionId === 'admin' && (!currentUserData || currentUserData.role !== 'teacher')) {
             showInfoModal("접근 불가", "관리자만 접근할 수 있는 페이지입니다.");
-            showSection('dashboard'); // 일반 사용자는 대시보드로 리디렉션
+            console.log("Admin access denied, redirecting to dashboard.");
+            showSection('dashboard'); 
             return;
         }
 
@@ -548,6 +595,7 @@
         const targetSection = document.getElementById(sectionId);
         if (targetSection) {
             targetSection.classList.remove('hidden');
+            console.log("Successfully shown section:", sectionId);
         } else {
             console.error(`Section with id "${sectionId}" not found.`);
             if (currentAuthUser) showSection('dashboard'); 
@@ -571,7 +619,7 @@
             if (sectionId === 'market') loadAndRenderMarketTabs();
             if (sectionId === 'transactions') renderTransactions();
             if (sectionId === 'deeds') renderDeeds();
-            if (sectionId === 'admin' && currentUserData.role === 'teacher') loadAdminData();
+            if (sectionId === 'admin' && currentUserData && currentUserData.role === 'teacher') loadAdminData();
         }
     }
     
@@ -582,8 +630,12 @@
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            if (link.dataset.section === 'login' && currentAuthUser) { 
-                signOut(auth).catch(error => console.error("Logout error:", error));
+            if (link.id === 'loginLink' && currentAuthUser) { 
+                console.log("Logout initiated by user.");
+                signOut(auth).catch(error => { 
+                    console.error("Logout error during signOut call:", error);
+                    showInfoModal("로그아웃 오류", `로그아웃 중 문제가 발생했습니다: ${error.message}`);
+                });
             } else {
                 showSection(link.dataset.section);
             }
@@ -601,13 +653,13 @@
     onAuthStateChanged(auth, async (user) => {
         currentAuthUser = user;
         if (user) {
-            console.log("User logged in:", user.uid, user.email, user.displayName);
+            console.log("onAuthStateChanged: User logged in:", user.uid, user.email, user.displayName);
             loggedInUserDisplay.textContent = user.displayName || user.email;
             loginLinkText.textContent = '로그아웃';
-            loginLink.dataset.section = 'logout'; 
 
             await loadCurrentUserData(user.uid); 
             attachRealtimeListeners(user.uid); 
+            startStockUpdates(); 
             
             if (currentUserData && currentUserData.role === 'teacher') {
                 adminNavLink.classList.remove('hidden');
@@ -619,16 +671,15 @@
             
             showSection('dashboard'); 
         } else {
-            console.log("User logged out or not logged in.");
+            console.log("onAuthStateChanged: User logged out or not logged in.");
             loggedInUserDisplay.textContent = '로그인 필요';
             loginLinkText.textContent = '로그인';
-            loginLink.dataset.section = 'login';
             adminNavLink.classList.add('hidden');
             adminDivider.classList.add('hidden');
 
-
             currentUserData = null; 
             detachRealtimeListeners(); 
+            stopStockUpdates(); 
             clearDashboard(); 
             showSection('login', true); 
         }
@@ -637,7 +688,10 @@
     function clearDashboard() {
         currentBalanceEl.textContent = formatCurrency(0);
         totalAssetValueEl.textContent = formatCurrency(0);
-        if (assetChartInstance) assetChartInstance.destroy();
+        if (assetChartInstance) {
+            assetChartInstance.destroy();
+            assetChartInstance = null;
+        }
         transactionListEl.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-stone-500">로그인이 필요합니다.</td></tr>';
         deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">로그인이 필요합니다.</li>';
     }
@@ -661,11 +715,11 @@
                     id: userId, 
                     name: currentAuthUser.displayName || "새 사용자", 
                     email: currentAuthUser.email, 
-                    balance: 50000, 
+                    balance: 2000, // 신규 가입자 초기 잔액 변경
                     portfolio: {}, 
                     transactions: [], 
                     deeds: [],
-                    role: 'student', // 기본 역할은 학생
+                    role: 'student', 
                     createdAt: serverTimestamp() 
                 };
                 await setDoc(userDocRef, {
@@ -704,7 +758,6 @@
                     const stockIdToRender = Object.keys(stockDataCache).find(id => stockDataCache[id].name === activeStockTab.textContent);
                     if(stockIdToRender) renderStockDetails(stockIdToRender);
                 }
-                 // Update admin link visibility based on role
                 if (currentUserData && currentUserData.role === 'teacher') {
                     adminNavLink.classList.remove('hidden');
                     adminDivider.classList.remove('hidden');
@@ -724,7 +777,11 @@
                 transactions.push({ id: doc.id, ...doc.data() });
             });
             if(currentUserData) { 
-                currentUserData.transactions = transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis()); 
+                currentUserData.transactions = transactions.sort((a, b) => {
+                    const aDate = (a.date && typeof a.date.toMillis === 'function') ? a.date.toMillis() : 0;
+                    const bDate = (b.date && typeof b.date.toMillis === 'function') ? b.date.toMillis() : 0;
+                    return bDate - aDate;
+                }); 
             }
             if (document.getElementById('transactions').classList.contains('hidden') === false) {
                 renderTransactions();
@@ -740,7 +797,11 @@
                 deeds.push({ id: doc.id, ...doc.data() });
             });
              if(currentUserData) { 
-                currentUserData.deeds = deeds.sort((a, b) => b.date.toMillis() - a.date.toMillis()); 
+                currentUserData.deeds = deeds.sort((a, b) => {
+                    const aDate = (a.date && typeof a.date.toMillis === 'function') ? a.date.toMillis() : 0;
+                    const bDate = (b.date && typeof b.date.toMillis === 'function') ? b.date.toMillis() : 0;
+                    return bDate - aDate;
+                });
             }
             if (document.getElementById('deeds').classList.contains('hidden') === false) {
                 renderDeeds();
@@ -766,6 +827,9 @@
             }
             if (updated && document.getElementById('dashboard').classList.contains('hidden') === false) {
                 updateDashboardDisplay(); 
+            }
+             if (updated && document.getElementById('admin').classList.contains('hidden') === false && currentUserData && currentUserData.role === 'teacher') {
+                loadAdminData(); 
             }
         }, (error) => {
             console.error("Error in stocks onSnapshot:", error);
@@ -854,9 +918,9 @@
                 uid: user.uid,
                 name: name,
                 email: user.email,
-                balance: 50000, 
+                balance: 2000, // 신규 가입자 초기 잔액 2000원으로 변경
                 portfolio: {}, 
-                role: 'student', // 기본 역할
+                role: 'student', 
                 createdAt: serverTimestamp()
             });
             showInfoModal("회원가입 성공!", "만승 경제 교실에 오신 것을 환영합니다!");
@@ -1040,7 +1104,132 @@
         }
     });
 
-    // --- Market Logic ---
+    // --- Market Logic (Stock & Gold) ---
+    async function initializeStockData() {
+        const initialStocks = {
+            'hanul': { name: '한울반 주식', price: 1000, history: [1000], color: 'rgba(59, 130, 246, 0.7)', minFluctuation: -50, maxFluctuation: 100, type: 'normal' },
+            'usan': { name: '우산 주식', price: 1000, history: [1000], color: 'rgba(16, 185, 129, 0.7)', minFluctuation: -50, maxFluctuation: 100, type: 'normal' },
+            'haetsal': { name: '햇살 주식', price: 1000, history: [1000], color: 'rgba(245, 158, 11, 0.7)', minFluctuation: -50, maxFluctuation: 100, type: 'normal' },
+            'gold': { name: '금', price: 0, history: [], color: 'rgba(234, 179, 8, 0.7)', type: 'gold' }
+        };
+
+        for (const stockId in initialStocks) {
+            const stockDocRef = doc(db, "stocks", stockId);
+            const docSnap = await getDoc(stockDocRef);
+            if (!docSnap.exists()) {
+                console.log(`Initializing stock: ${stockId}`);
+                await setDoc(stockDocRef, initialStocks[stockId]);
+            }
+        }
+    }
+    
+    async function updateNormalStockPrices() {
+        console.log("Updating normal stock prices...");
+        for (const stockId in stockDataCache) {
+            const stock = stockDataCache[stockId];
+            if (stock.type === 'normal') {
+                const minFluctuation = stock.minFluctuation || -50; 
+                const maxFluctuation = stock.maxFluctuation || 100; 
+                const change = Math.floor(Math.random() * (maxFluctuation - minFluctuation + 1)) + minFluctuation;
+                let newPrice = stock.price + change;
+                if (newPrice < 100) newPrice = 100; 
+
+                const newHistory = [...(stock.history || [])];
+                newHistory.push(newPrice);
+                if (newHistory.length > MAX_HISTORY_LENGTH) newHistory.shift();
+                
+                const stockDocRef = doc(db, "stocks", stockId);
+                try {
+                    await updateDoc(stockDocRef, { price: newPrice, history: newHistory });
+                    console.log(`Updated ${stock.name} to ${newPrice}`);
+                } catch (error) {
+                    console.error(`Error updating ${stock.name}:`, error);
+                }
+            }
+        }
+    }
+
+    async function fetchGoldPriceUSD() {
+        try {
+            const response = await fetch('https://data-asg.goldprice.org/dbXRates/USD');
+            if (!response.ok) throw new Error(`Gold API Error: ${response.status}`);
+            const data = await response.json();
+            if (data && data.items && data.items.length > 0 && data.items[0].xauPrice) {
+                 return data.items[0].xauPrice;
+            }
+            console.error("Gold API response structure unexpected:", data);
+            return null; 
+        } catch (error) {
+            console.error("Error fetching gold price (USD):", error);
+            return null;
+        }
+    }
+
+    async function fetchUSDKRWExchangeRate() {
+        try {
+            const response = await fetch('https://open.er-api.com/v6/latest/USD');
+            if (!response.ok) throw new Error(`Exchange Rate API Error: ${response.status}`);
+            const data = await response.json();
+            if (data && data.rates && data.rates.KRW) {
+                return data.rates.KRW;
+            }
+            console.error("Exchange Rate API response structure unexpected:", data);
+            return null;
+        } catch (error) {
+            console.error("Error fetching USD/KRW exchange rate:", error);
+            return null;
+        }
+    }
+
+    async function updateGoldPriceKRW() {
+        console.log("Updating gold price...");
+        const goldPriceUSD_perOunce = await fetchGoldPriceUSD();
+        const usdToKrwRate = await fetchUSDKRWExchangeRate();
+
+        if (goldPriceUSD_perOunce !== null && usdToKrwRate !== null) {
+            const ouncesToGrams = 28.3495;
+            const goldPriceKRW_perGram = (goldPriceUSD_perOunce * usdToKrwRate) / ouncesToGrams;
+            
+            const goldStock = stockDataCache['gold'];
+            const newHistory = [...(goldStock?.history || [])];
+            newHistory.push(Math.round(goldPriceKRW_perGram));
+            if (newHistory.length > MAX_HISTORY_LENGTH) newHistory.shift();
+
+            const goldDocRef = doc(db, "stocks", "gold");
+            try {
+                await updateDoc(goldDocRef, { price: Math.round(goldPriceKRW_perGram), history: newHistory });
+                console.log(`Updated Gold price (KRW/g) to ${Math.round(goldPriceKRW_perGram)}`);
+            } catch (error) {
+                console.error("Error updating gold price in Firestore:", error);
+            }
+        } else {
+            console.log("Failed to update gold price due to API fetch errors.");
+        }
+    }
+    
+    function startStockUpdates() {
+        console.log("Starting stock updates...");
+        initializeStockData().then(() => { 
+            if (stockUpdateInterval) clearInterval(stockUpdateInterval);
+            if (goldUpdateInterval) clearInterval(goldUpdateInterval);
+
+            updateNormalStockPrices(); 
+            updateGoldPriceKRW();    
+
+            stockUpdateInterval = setInterval(updateNormalStockPrices, 60000); 
+            goldUpdateInterval = setInterval(updateGoldPriceKRW, 60000); 
+        });
+    }
+
+    function stopStockUpdates() {
+        console.log("Stopping stock updates.");
+        if (stockUpdateInterval) clearInterval(stockUpdateInterval);
+        if (goldUpdateInterval) clearInterval(goldUpdateInterval);
+        stockUpdateInterval = null;
+        goldUpdateInterval = null;
+    }
+
+
     async function loadAndRenderMarketTabs() {
         if (!currentAuthUser) return;
         marketTabsContainer.innerHTML = '<p class="text-sm text-stone-500">주식 정보 로딩 중...</p>';
@@ -1068,6 +1257,8 @@
             return;
         }
         
+        stockIds.sort((a,b) => (stockDataCache[a].name > stockDataCache[b].name) ? 1 : -1); 
+
         stockIds.forEach((stockId, index) => {
             const stock = stockDataCache[stockId];
             const tabButton = document.createElement('button');
@@ -1086,7 +1277,7 @@
         });
     }
 
-    function renderStockDetails(stockId) {
+    function renderStockDetails(stockId, filterType = 'day') { 
         if (!currentUserData || !stockDataCache[stockId]) {
              marketContentContainer.innerHTML = '<p class="text-center text-stone-500">주식 정보를 불러올 수 없습니다.</p>';
             return;
@@ -1108,7 +1299,11 @@
                          <button id="aiStockAnalysisBtn-${stockId}" data-stock-id="${stockId}" class="mt-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-3 rounded-lg text-sm transition-transform hover:scale-105">✨ AI 종목 분석</button>
                     </div>
                 </div>
-
+                <div class="mb-4 flex justify-center space-x-2">
+                    <button data-stock-id="${stockId}" data-filter="day" class="time-filter-btn ${filterType === 'day' ? 'active' : ''} bg-stone-200 hover:bg-stone-300 text-stone-700 text-xs py-1 px-3 rounded">1시간</button>
+                    <button data-stock-id="${stockId}" data-filter="week" class="time-filter-btn ${filterType === 'week' ? 'active' : ''} bg-stone-200 hover:bg-stone-300 text-stone-700 text-xs py-1 px-3 rounded">1일</button>
+                    <button data-stock-id="${stockId}" data-filter="month" class="time-filter-btn ${filterType === 'month' ? 'active' : ''} bg-stone-200 hover:bg-stone-300 text-stone-700 text-xs py-1 px-3 rounded">전체</button>
+                </div>
                 <div class="chart-container h-64 md:h-80 mb-6">
                     <canvas id="stockChart-${stockId}"></canvas>
                 </div>
@@ -1141,7 +1336,18 @@
                 </div>
             </div>
         `;
-        renderStockChart(stockId, stock.history || [], stock.color || getRandomColor());
+        
+        let historyToDisplay = stock.history || [];
+        if (filterType === 'day') { 
+            historyToDisplay = historyToDisplay.slice(-60); 
+        } else if (filterType === 'week') { 
+             historyToDisplay = historyToDisplay.slice(- (60 * 24) > MAX_HISTORY_LENGTH ? -MAX_HISTORY_LENGTH : -(60*24) ); 
+        } else if (filterType === 'month') { 
+            historyToDisplay = historyToDisplay.slice(-MAX_HISTORY_LENGTH);
+        }
+
+
+        renderStockChart(stockId, historyToDisplay, stock.color || getRandomColor());
 
         const buyQuantityInput = document.getElementById(`buyQuantity-${stockId}`);
         const buyEstimateEl = document.getElementById(`buyEstimate-${stockId}`);
@@ -1163,6 +1369,14 @@
         const sellForm = document.getElementById(`sellForm-${stockId}`);
         if (sellForm) sellForm.addEventListener('submit', handleSellStock);
         document.getElementById(`aiStockAnalysisBtn-${stockId}`).addEventListener('click', handleAiStockAnalysis);
+        
+        document.querySelectorAll(`#marketContent .time-filter-btn`).forEach(button => {
+            button.addEventListener('click', (e) => {
+                const stockIdForFilter = e.target.dataset.stockId;
+                const filter = e.target.dataset.filter;
+                renderStockDetails(stockIdForFilter, filter);
+            });
+        });
     }
 
     async function handleAiStockAnalysis(e) {
@@ -1177,7 +1391,15 @@
         if (stockChartInstances[stockId]) {
             stockChartInstances[stockId].destroy();
         }
-        const labels = historyData.map((_, index) => `T-${historyData.length - 1 - index}`); 
+        if (!historyData || historyData.length === 0) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#888";
+            ctx.fillText("가격 기록이 없습니다.", ctx.canvas.width / 2, ctx.canvas.height / 2);
+            return;
+        }
+
+        const labels = historyData.map((_, index) => `${index + 1}`); 
 
         stockChartInstances[stockId] = new Chart(ctx, {
             type: 'line',
@@ -1193,14 +1415,12 @@
                 responsive: true, maintainAspectRatio: false,
                 scales: {
                     y: { beginAtZero: false, ticks: { callback: function(value) { return formatCurrency(value); }}},
-                    x: { ticks: { maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 7 } }
+                    x: { ticks: { maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 10 } } 
                 },
                 plugins: { legend: { display: false }, tooltip: { callbacks: {
                     label: function(context) { return formatCurrency(context.parsed.y); },
                     title: function(context) { 
-                        const title = context[0].label; const maxLength = 16;
-                        if (title.length > maxLength) { return title.match(new RegExp('.{1,' + maxLength + '}', 'g'));}
-                        return title;
+                        return `시점 ${context[0].label}`; 
                     }
                 }}}
             }
@@ -1323,6 +1543,22 @@
             showInfoModal('오류', '선행 내용을 입력해주세요.');
             return;
         }
+
+        const deedsColRefQuery = query(
+            collection(db, "users", currentAuthUser.uid, "deeds"),
+            orderBy("date", "desc"),
+            limit(1)
+        );
+        const lastDeedSnapshot = await getDocs(deedsColRefQuery);
+        if (!lastDeedSnapshot.empty) {
+            const lastDeedData = lastDeedSnapshot.docs[0].data();
+            if (lastDeedData.date && isSameDay(lastDeedData.date, new Date())) {
+                showInfoModal("알림", "오늘은 이미 선행을 등록했어요! 내일 다시 시도해주세요.");
+                return;
+            }
+        }
+
+
         const reward = 1000;
         
         try {
@@ -1440,6 +1676,12 @@
                 case 'deed':
                     amountDisplay = `<span class="text-amber-600 font-semibold">+${formatCurrency(tx.amount)}</span>`;
                     break;
+                case 'admin_credit':
+                    amountDisplay = `<span class="text-blue-600 font-semibold">+${formatCurrency(tx.amount)}</span>`;
+                    break;
+                case 'admin_debit':
+                    amountDisplay = `<span class="text-orange-600 font-semibold">-${formatCurrency(tx.amount)}</span>`;
+                    break;
                 default:
                     amountDisplay = formatCurrency(tx.amount);
             }
@@ -1462,6 +1704,8 @@
             case 'buy': return '주식매수';
             case 'sell': return '주식매도';
             case 'deed': return '선행보상';
+            case 'admin_credit': return '관리자 지급';
+            case 'admin_debit': return '관리자 회수';
             default: return type;
         }
     }
@@ -1478,7 +1722,7 @@
         adminStudentListEl.innerHTML = '<li>학생 정보 로딩 중...</li>';
         try {
             const usersSnapshot = await getDocs(collection(db, "users"));
-            adminStudentListEl.innerHTML = ''; // Clear previous list
+            adminStudentListEl.innerHTML = ''; 
             usersSnapshot.forEach(docSnap => {
                 const student = docSnap.data();
                 const studentId = docSnap.id;
@@ -1506,11 +1750,49 @@
 
         const adminStockSelect = document.getElementById('adminStockSelect');
         adminStockSelect.innerHTML = '<option value="">-- 주식 선택 --</option>';
-        Object.keys(stockDataCache).forEach(stockId => {
+        adminStockFluctuationSettingsEl.innerHTML = ''; 
+
+        Object.keys(stockDataCache).sort((a,b) => (stockDataCache[a].name > stockDataCache[b].name) ? 1 : -1).forEach(stockId => {
+            const stock = stockDataCache[stockId];
             const option = document.createElement('option');
             option.value = stockId;
-            option.textContent = stockDataCache[stockId].name;
+            option.textContent = stock.name;
             adminStockSelect.appendChild(option);
+
+            if (stock.type === 'normal') {
+                const settingDiv = document.createElement('div');
+                settingDiv.className = 'mt-2 p-2 border rounded border-stone-300';
+                settingDiv.innerHTML = `
+                    <p class="text-sm font-medium text-stone-700">${stock.name} 변동폭:</p>
+                    <div class="flex space-x-2 mt-1">
+                        <input type="number" id="minFluctuation-${stockId}" value="${stock.minFluctuation || -50}" placeholder="최소" class="w-1/2 p-1 border rounded text-sm">
+                        <input type="number" id="maxFluctuation-${stockId}" value="${stock.maxFluctuation || 100}" placeholder="최대" class="w-1/2 p-1 border rounded text-sm">
+                    </div>
+                    <button data-stockid="${stockId}" class="save-fluctuation-btn mt-2 bg-green-500 hover:bg-green-600 text-white text-xs py-1 px-2 rounded w-full">변동폭 저장 (${stock.name})</button>
+                `;
+                adminStockFluctuationSettingsEl.appendChild(settingDiv);
+            }
+        });
+        
+        document.querySelectorAll('.save-fluctuation-btn').forEach(button => {
+            button.addEventListener('click', async (e) => {
+                const stockId = e.target.dataset.stockid;
+                const minFluctuation = parseInt(document.getElementById(`minFluctuation-${stockId}`).value);
+                const maxFluctuation = parseInt(document.getElementById(`maxFluctuation-${stockId}`).value);
+
+                if (isNaN(minFluctuation) || isNaN(maxFluctuation) || minFluctuation >= maxFluctuation) {
+                    showInfoModal("오류", "유효한 변동폭을 입력하세요 (최소 < 최대).");
+                    return;
+                }
+                try {
+                    const stockDocRef = doc(db, "stocks", stockId);
+                    await updateDoc(stockDocRef, { minFluctuation, maxFluctuation });
+                    showInfoModal("성공", `${stockDataCache[stockId].name} 변동폭이 저장되었습니다.`);
+                } catch (error) {
+                    console.error("Error saving fluctuation range:", error);
+                    showInfoModal("오류", "변동폭 저장 중 오류 발생.");
+                }
+            });
         });
     }
     
@@ -1531,18 +1813,16 @@
                 balance: increment(amount)
             });
 
-            // 관리자 조정 거래 내역 추가 (학생 계정)
             const txColRef = collection(db, "users", studentIdToAdjust, "transactions");
             await addDoc(txColRef, {
                 type: amount >= 0 ? 'admin_credit' : 'admin_debit',
                 description: reason,
-                amount: Math.abs(amount), // 항상 양수로 기록, 타입으로 구분
+                amount: Math.abs(amount), 
                 date: serverTimestamp()
             });
 
             showInfoModal("성공", "학생 잔액이 성공적으로 조정되었습니다.");
             closeAdminAdjustBalanceModal();
-            loadAdminData(); // 목록 새로고침
         } catch (error) {
             console.error("Error adjusting student balance:", error);
             showInfoModal("오류", `잔액 조정 중 오류 발생: ${error.message}`);
@@ -1558,21 +1838,25 @@
         try {
             for (const stockId in stockDataCache) {
                 const stock = stockDataCache[stockId];
-                const changePercent = (Math.random() - 0.45) * 0.15; 
-                let newPrice = Math.round(stock.price * (1 + changePercent));
-                if (newPrice < 100) newPrice = 100; 
-                
-                const newHistory = [...(stock.history || [])];
-                newHistory.push(newPrice);
-                if (newHistory.length > 20) newHistory.shift();
+                if (stock.type === 'normal') { 
+                    const minFluctuation = stock.minFluctuation || -50;
+                    const maxFluctuation = stock.maxFluctuation || 100;
+                    const change = Math.floor(Math.random() * (maxFluctuation - minFluctuation + 1)) + minFluctuation;
+                    let newPrice = stock.price + change;
+                    if (newPrice < 100) newPrice = 100; 
+                    
+                    const newHistory = [...(stock.history || [])];
+                    newHistory.push(newPrice);
+                    if (newHistory.length > MAX_HISTORY_LENGTH) newHistory.shift();
 
-                const stockDocRef = doc(db, "stocks", stockId);
-                await updateDoc(stockDocRef, { 
-                    price: newPrice,
-                    history: newHistory 
-                });
+                    const stockDocRef = doc(db, "stocks", stockId);
+                    await updateDoc(stockDocRef, { 
+                        price: newPrice,
+                        history: newHistory 
+                    });
+                }
             }
-            showInfoModal('알림', '모든 주식/금 가격이 임의로 변경되었습니다.');
+            showInfoModal('알림', '일반 주식 가격이 임의로 변경되었습니다.');
         } catch (error) {
             console.error("Error randomizing prices:", error);
             showInfoModal("오류", "주가 변경 중 오류 발생");
@@ -1599,7 +1883,7 @@
 
             const newHistory = [...(stock.history || [])];
             newHistory.push(newPrice);
-            if (newHistory.length > 20) newHistory.shift();
+            if (newHistory.length > MAX_HISTORY_LENGTH) newHistory.shift();
 
             const stockDocRef = doc(db, "stocks", stockId);
             await updateDoc(stockDocRef, { 
