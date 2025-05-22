@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>만승 경제 교실</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Wallet: KRW Balance (Stat), Asset Summary (Stat), Asset Allocation (Chart.js Donut). Data from Firestore.
+        - Transfers: Form. Transactions logged to Firestore.
+        - Stock Market: Tabs per stock. Price/Change/Volume (Stats from Firestore), Price History (Chart.js Line from Firestore), Buy/Sell Forms (updates Firestore). AI Stock Analysis (Gemini API).
+        - Good Deeds: Submission Form, Status List (data from Firestore). AI Deed Story Expansion (Gemini API).
+        - Transactions: Table/List with filters (data from Firestore).
+        - Admin: Student list with details, placeholder for balance adjustment.
+        - All interactions via vanilla JS. Data stored in Firestore. NO SVG/Mermaid. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-display { font-family: 'GmarketSansMedium', sans-serif; /* 예시 폰트, 실제 사용 시 웹폰트 로드 필요 */ }
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s ease-in-out; }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0; }
+            .sidebar-toggle { display: block; }
+        }
+        @media (min-width: 769px) {
+            .sidebar { transform: translateX(0); }
+            .main-content { margin-left: 16rem; /* 사이드바 너비만큼 */ }
+            .sidebar-toggle { display: none; }
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* 기본 최대 너비 */
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px; /* 기본 높이 */
+            max-height: 400px; /* 최대 높이 */
+        }
+        @media (min-width: 768px) { /* md 브레이크포인트 */
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .tab-button.active {
+            border-bottom-color: #0d9488; /* teal-600 */
+            color: #0d9488;
+            font-weight: 600;
+        }
+        .modal, .ai-modal, .admin-modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+        .modal-content, .ai-modal-content, .admin-modal-content {
+            background-color: #fefefe;
+            margin: 10% auto; 
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; 
+            max-width: 600px; 
+            border-radius: 0.5rem;
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+    <div class="flex h-screen">
+        <button id="sidebarToggle" class="sidebar-toggle fixed top-4 left-4 z-30 p-2 bg-teal-600 text-white rounded-md md:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+        </button>
+
+        <aside id="sidebar" class="sidebar fixed inset-y-0 left-0 z-20 w-64 bg-teal-700 text-white p-6 space-y-4 shadow-lg md:translate-x-0">
+            <h1 class="text-3xl font-bold font-display">만승 경제 교실</h1>
+            <nav class="space-y-2">
+                <a href="#" data-section="dashboard" class="nav-link active-nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>🏠</span><span>내 지갑 (현황판)</span>
+                </a>
+                <a href="#" data-section="transfer" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>💸</span><span>계좌 이체</span>
+                </a>
+                <a href="#" data-section="market" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>📈</span><span>주식 시장</span>
+                </a>
+                <a href="#" data-section="deeds" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>🌟</span><span>나의 선행</span>
+                </a>
+                <a href="#" data-section="transactions" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>🧾</span><span>거래 내역</span>
+                </a>
+                <hr id="adminDivider" class="border-teal-500 hidden">
+                <a href="#" id="adminNavLink" data-section="admin" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors hidden">
+                    <span>⚙️</span><span>관리자 (교사용)</span>
+                </a>
+                 <a href="#" id="loginLink" data-section="login" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>🔑</span><span id="loginLinkText">로그인</span>
+                </a>
+            </nav>
+            <div class="absolute bottom-4 left-4 text-sm">
+                <p>로그인: <span id="loggedInUserDisplay">로그인 필요</span></p>
+            </div>
+        </aside>
+
+        <main id="mainContent" class="main-content flex-1 p-6 md:p-10 overflow-y-auto">
+            <section id="login" class="hidden space-y-6 max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
+                <h2 class="text-3xl font-semibold text-teal-800 text-center">로그인</h2>
+                <p class="text-stone-600 text-center">만승 경제 교실에 오신 것을 환영합니다!</p>
+                <form id="loginForm" class="space-y-4">
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-stone-700">이메일</label>
+                        <input type="email" id="email" name="email" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="your@email.com">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-stone-700">비밀번호</label>
+                        <input type="password" id="password" name="password" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="********">
+                    </div>
+                    <button type="submit" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">로그인</button>
+                </form>
+                <p class="text-sm text-center text-stone-500">계정이 없으신가요? <a href="#" id="switchToRegister" class="text-teal-600 hover:underline">회원가입</a></p>
+                <p id="authError" class="text-sm text-center text-red-500 hidden"></p>
+            </section>
+
+            <section id="register" class="hidden space-y-6 max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
+                <h2 class="text-3xl font-semibold text-teal-800 text-center">회원가입</h2>
+                <form id="registerForm" class="space-y-4">
+                    <div>
+                        <label for="registerName" class="block text-sm font-medium text-stone-700">이름</label>
+                        <input type="text" id="registerName" name="name" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="김만승">
+                    </div>
+                    <div>
+                        <label for="registerEmail" class="block text-sm font-medium text-stone-700">이메일</label>
+                        <input type="email" id="registerEmail" name="email" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="your@email.com">
+                    </div>
+                    <div>
+                        <label for="registerPassword" class="block text-sm font-medium text-stone-700">비밀번호</label>
+                        <input type="password" id="registerPassword" name="password" required minlength="6" class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="6자 이상">
+                    </div>
+                    <button type="submit" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">회원가입</button>
+                </form>
+                <p class="text-sm text-center text-stone-500">이미 계정이 있으신가요? <a href="#" id="switchToLogin" class="text-teal-600 hover:underline">로그인</a></p>
+                <p id="registerAuthError" class="text-sm text-center text-red-500 hidden"></p>
+            </section>
+
+            <section id="dashboard" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-teal-800">🏠 내 지갑 현황</h2>
+                <p class="text-stone-600">나의 현재 자산 상태와 보유 현황을 한눈에 볼 수 있어요.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-teal-700 mb-2">💰 현재 잔액 (KRW)</h3>
+                        <p id="currentBalance" class="text-4xl font-bold text-sky-600">0 원</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-teal-700 mb-2">📊 총 자산 가치</h3>
+                        <p id="totalAssetValue" class="text-4xl font-bold text-emerald-600">0 원</p>
+                        <p class="text-sm text-stone-500">(현금 + 주식/금 평가액)</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold text-teal-700 mb-4">🎨 자산 구성</h3>
+                    <div class="chart-container h-64 md:h-80">
+                        <canvas id="assetAllocationChart"></canvas>
+                    </div>
+                </div>
+                <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <button data-section="transfer" class="quick-action-button bg-sky-500 hover:bg-sky-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105">💸 계좌 이체하기</button>
+                    <button data-section="market" class="quick-action-button bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105">📈 주식 거래하기</button>
+                    <button data-section="deeds" class="quick-action-button bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105">🌟 선행 등록하기</button>
+                </div>
+            </section>
+
+            <section id="transfer" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-teal-800">💸 계좌 이체</h2>
+                <p class="text-stone-600">친구에게 돈을 보낼 수 있어요. 정확한 정보를 입력해주세요.</p>
+                <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg mx-auto">
+                    <form id="transferForm" class="space-y-4">
+                        <div>
+                            <label for="recipient" class="block text-sm font-medium text-stone-700">받는 사람 (이메일)</label>
+                            <input type="email" id="recipient" name="recipient" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="friend@email.com">
+                        </div>
+                        <div>
+                            <label for="transferAmount" class="block text-sm font-medium text-stone-700">보낼 금액 (원)</label>
+                            <input type="number" id="transferAmount" name="transferAmount" min="100" step="100" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="예: 5000">
+                        </div>
+                        <div>
+                            <label for="transferMemo" class="block text-sm font-medium text-stone-700">메모 (선택)</label>
+                            <input type="text" id="transferMemo" name="transferMemo" class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="예: 생일 축하해!">
+                        </div>
+                        <button type="submit" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">보내기</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="market" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-teal-800">📈 주식 시장</h2>
+                <p class="text-stone-600">다양한 주식과 금을 사고 팔 수 있어요. 신중하게 투자하세요!</p>
+                <div>
+                    <div class="border-b border-stone-200 mb-4">
+                        <nav class="-mb-px flex space-x-8" aria-label="Tabs" id="marketTabsContainer">
+                            </nav>
+                    </div>
+                    <div id="marketContent" class="space-y-6">
+                        </div>
+                </div>
+            </section>
+
+            <section id="deeds" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-teal-800">🌟 나의 선행</h2>
+                <p class="text-stone-600">착한 일을 하고 내용을 기록하면 용돈을 받을 수 있어요! (1건당 1,000원)</p>
+                <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg mx-auto">
+                    <form id="deedForm" class="space-y-4">
+                        <div>
+                            <label for="deedDescription" class="block text-sm font-medium text-stone-700">선행 내용</label>
+                            <textarea id="deedDescription" name="deedDescription" rows="4" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="예: 친구의 숙제를 도와주었습니다."></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">선행 등록하기</button>
+                    </form>
+                </div>
+                <div class="mt-8 bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold text-teal-700 mb-4">나의 선행 기록</h3>
+                    <ul id="deedList" class="space-y-3 max-h-96 overflow-y-auto">
+                        <li class="p-3 bg-stone-50 rounded-md border border-stone-200">등록된 선행이 없습니다.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="transactions" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-teal-800">🧾 거래 내역</h2>
+                <p class="text-stone-600">모든 돈과 주식 거래 기록을 확인할 수 있어요.</p>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-teal-700">최근 거래</h3>
+                        <select id="transactionFilter" class="p-2 border border-stone-300 rounded-md focus:ring-teal-500 focus:border-teal-500">
+                            <option value="all">모든 내역</option>
+                            <option value="transfer_in">입금</option>
+                            <option value="transfer_out">출금</option>
+                            <option value="buy">매수</option>
+                            <option value="sell">매도</option>
+                            <option value="deed">선행보상</option>
+                        </select>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-stone-200">
+                            <thead class="bg-stone-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">날짜/시간</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">종류</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">내용</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-stone-500 uppercase tracking-wider">금액/수량</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-stone-500 uppercase tracking-wider">잔액/보유량</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionList" class="bg-white divide-y divide-stone-200">
+                                <tr><td colspan="5" class="text-center py-4 text-stone-500">거래 내역이 없습니다.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="admin" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-red-700">⚙️ 관리자 페이지 (교사용)</h2>
+                <p class="text-stone-600">이 페이지는 교사만 접근할 수 있습니다. 학생 정보 및 시장을 관리합니다.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-red-600 mb-2">학생 관리</h3>
+                        <ul id="adminStudentList" class="space-y-2 text-sm"><li>불러오는 중...</li></ul>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-red-600 mb-2">시장 관리</h3>
+                        <button id="randomizePricesBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg text-sm">주가 임의 변경</button>
+                        <div class="mt-4">
+                            <h4 class="text-md font-semibold text-red-500 mb-1">주식/금 가격 수동 변경</h4>
+                            <select id="adminStockSelect" class="p-2 border rounded mb-2 w-full"></select>
+                            <input type="number" id="adminNewPrice" placeholder="새 가격" class="p-2 border rounded w-full mb-2">
+                            <button id="adminUpdatePriceBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg text-sm w-full">가격 업데이트</button>
+                        </div>
+                    </div>
+                     <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-red-600 mb-2">선행 승인 관리 (구현 예정)</h3>
+                         <p class="text-sm text-stone-500 mb-2">현재 자동 승인. 수동 승인 기능은 추후 구현.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeInfoModal()">&times;</span>
+            <h3 id="modalTitle" class="text-xl font-semibold mb-2">알림</h3>
+            <p id="modalMessage" class="text-stone-700 whitespace-pre-wrap"></p>
+            <div class="mt-4 text-right">
+                <button onclick="closeInfoModal()" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="aiContentModal" class="ai-modal">
+        <div class="ai-modal-content">
+            <span class="close-button" onclick="closeAiModal()">&times;</span>
+            <h3 id="aiModalTitle" class="text-2xl font-bold text-purple-600 mb-3">✨ AI 생성 내용</h3>
+            <div id="aiLoadingSpinner" class="loading-spinner hidden"></div>
+            <p id="aiModalMessage" class="text-stone-700 whitespace-pre-wrap text-lg leading-relaxed"></p>
+            <div class="mt-6 text-right">
+                <button onclick="closeAiModal()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="adminAdjustBalanceModal" class="admin-modal">
+        <div class="admin-modal-content">
+            <span class="close-button" onclick="closeAdminAdjustBalanceModal()">&times;</span>
+            <h3 id="adminAdjustBalanceModalTitle" class="text-xl font-semibold text-red-600 mb-3">학생 잔액 조정</h3>
+            <p id="adminAdjustBalanceStudentInfo" class="text-sm text-stone-600 mb-3"></p>
+            <div>
+                <label for="adminAdjustmentAmount" class="block text-sm font-medium text-stone-700">조정 금액 (양수: 증가, 음수: 감소)</label>
+                <input type="number" id="adminAdjustmentAmount" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500">
+            </div>
+            <div class="mt-2">
+                <label for="adminAdjustmentReason" class="block text-sm font-medium text-stone-700">조정 사유</label>
+                <input type="text" id="adminAdjustmentReason" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500" placeholder="예: 특별 보상">
+            </div>
+            <div class="mt-4 text-right space-x-2">
+                <button onclick="closeAdminAdjustBalanceModal()" class="bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg">취소</button>
+                <button id="adminConfirmAdjustBalanceBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">잔액 조정</button>
+            </div>
+        </div>
+    </div>
+
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+        getAuth, 
+        createUserWithEmailAndPassword, 
+        signInWithEmailAndPassword, 
+        onAuthStateChanged, 
+        signOut,
+        updateProfile
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+        getFirestore, 
+        collection, 
+        doc, 
+        setDoc, 
+        getDoc, 
+        updateDoc, 
+        deleteDoc, 
+        onSnapshot, 
+        query, 
+        where, 
+        addDoc, 
+        getDocs, 
+        serverTimestamp, 
+        increment,
+        runTransaction,
+        Timestamp
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDCeJPDQUNi-KmJ9DhkTRIu-9t2PGZCpt0",
+      authDomain: "mansungcoin-c6e06.firebaseapp.com",
+      projectId: "mansungcoin-c6e06",
+      storageBucket: "mansungcoin-c6e06.appspot.com",
+      messagingSenderId: "704809284946",
+      appId: "1:704809284946:web:3e71d98f38810577e1768b"
+    };
+
+    // Initialize Firebase
+    const firebaseApp = initializeApp(firebaseConfig); // Renamed to avoid conflict
+    const auth = getAuth(firebaseApp);
+    const db = getFirestore(firebaseApp);
+
+    // --- Global Variables ---
+    let currentUserData = null; 
+    let currentAuthUser = null; 
+    let stockDataCache = {}; 
+    let unsubscribePortfolioListener = null;
+    let unsubscribeTransactionsListener = null;
+    let unsubscribeDeedsListener = null;
+    let unsubscribeStockListeners = {};
+
+
+    // --- Chart Instances ---
+    let assetChartInstance = null;
+    const stockChartInstances = {};
+
+    // --- Utility Functions ---
+    const formatCurrency = (amount) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount);
+    const formatDate = (date) => {
+        if (date instanceof Timestamp) { 
+            date = date.toDate();
+        }
+        const d = new Date(date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+
+    // --- Modal Functions ---
+    const infoModal = document.getElementById('infoModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMessage = document.getElementById('modalMessage');
+    const aiContentModal = document.getElementById('aiContentModal');
+    const aiModalTitle = document.getElementById('aiModalTitle');
+    const aiModalMessage = document.getElementById('aiModalMessage');
+    const aiLoadingSpinner = document.getElementById('aiLoadingSpinner');
+    const adminAdjustBalanceModal = document.getElementById('adminAdjustBalanceModal');
+    const adminAdjustBalanceModalTitle = document.getElementById('adminAdjustBalanceModalTitle');
+    const adminAdjustBalanceStudentInfo = document.getElementById('adminAdjustBalanceStudentInfo');
+    const adminAdjustmentAmountInput = document.getElementById('adminAdjustmentAmount');
+    const adminAdjustmentReasonInput = document.getElementById('adminAdjustmentReason');
+    const adminConfirmAdjustBalanceBtn = document.getElementById('adminConfirmAdjustBalanceBtn');
+    let studentIdToAdjust = null;
+
+
+    function showInfoModal(title, message) {
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        infoModal.style.display = 'block';
+    }
+
+    function closeInfoModal() {
+        infoModal.style.display = 'none';
+    }
+    
+    function showAiModal(title) {
+        aiModalTitle.textContent = title;
+        aiModalMessage.textContent = '';
+        aiLoadingSpinner.classList.remove('hidden');
+        aiContentModal.style.display = 'block';
+    }
+
+    function updateAiModalContent(content) {
+        aiModalMessage.textContent = content;
+        aiLoadingSpinner.classList.add('hidden');
+    }
+
+    function closeAiModal() {
+        aiContentModal.style.display = 'none';
+        aiLoadingSpinner.classList.add('hidden');
+    }
+    
+    function showAdminAdjustBalanceModal(studentId, studentName, currentBalance) {
+        studentIdToAdjust = studentId;
+        adminAdjustBalanceModalTitle.textContent = `${studentName} 학생 잔액 조정`;
+        adminAdjustBalanceStudentInfo.textContent = `현재 잔액: ${formatCurrency(currentBalance)}`;
+        adminAdjustmentAmountInput.value = '';
+        adminAdjustmentReasonInput.value = '';
+        adminAdjustBalanceModal.style.display = 'block';
+    }
+
+    function closeAdminAdjustBalanceModal() {
+        adminAdjustBalanceModal.style.display = 'none';
+        studentIdToAdjust = null;
+    }
+
+
+    window.onclick = function(event) {
+        if (event.target == infoModal) {
+            closeInfoModal();
+        }
+        if (event.target == aiContentModal) {
+            closeAiModal();
+        }
+        if (event.target == adminAdjustBalanceModal) {
+            closeAdminAdjustBalanceModal();
+        }
+    }
+
+    // --- DOM Elements ---
+    const sections = document.querySelectorAll('main section');
+    const navLinks = document.querySelectorAll('.nav-link');
+    const adminNavLink = document.getElementById('adminNavLink');
+    const adminDivider = document.getElementById('adminDivider');
+    const quickActionButtons = document.querySelectorAll('.quick-action-button');
+    const currentBalanceEl = document.getElementById('currentBalance');
+    const totalAssetValueEl = document.getElementById('totalAssetValue');
+    const recipientInput = document.getElementById('recipient'); 
+    const transferForm = document.getElementById('transferForm');
+    const deedForm = document.getElementById('deedForm');
+    const deedDescriptionEl = document.getElementById('deedDescription');
+    const deedListEl = document.getElementById('deedList');
+    const transactionListEl = document.getElementById('transactionList');
+    const transactionFilterEl = document.getElementById('transactionFilter');
+    const marketTabsContainer = document.getElementById('marketTabsContainer');
+    const marketContentContainer = document.getElementById('marketContent');
+    const loggedInUserDisplay = document.getElementById('loggedInUserDisplay');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const loginLink = document.getElementById('loginLink');
+    const loginLinkText = document.getElementById('loginLinkText');
+    const authErrorEl = document.getElementById('authError');
+    const registerAuthErrorEl = document.getElementById('registerAuthError');
+    const adminStudentListEl = document.getElementById('adminStudentList');
+
+
+    // --- Navigation ---
+    function showSection(sectionId, forceShow = false) {
+        if (!currentAuthUser && !forceShow && sectionId !== 'login' && sectionId !== 'register') {
+            showSection('login', true); 
+            return;
+        }
+        
+        if (sectionId === 'admin' && (!currentUserData || currentUserData.role !== 'teacher')) {
+            showInfoModal("접근 불가", "관리자만 접근할 수 있는 페이지입니다.");
+            showSection('dashboard'); // 일반 사용자는 대시보드로 리디렉션
+            return;
+        }
+
+
+        sections.forEach(section => {
+            section.classList.add('hidden');
+        });
+        const targetSection = document.getElementById(sectionId);
+        if (targetSection) {
+            targetSection.classList.remove('hidden');
+        } else {
+            console.error(`Section with id "${sectionId}" not found.`);
+            if (currentAuthUser) showSection('dashboard'); 
+            else showSection('login', true); 
+            return;
+        }
+
+
+        navLinks.forEach(link => {
+            link.classList.remove('bg-teal-600', 'font-semibold');
+            if (link.dataset.section === sectionId) {
+                link.classList.add('bg-teal-600', 'font-semibold');
+            }
+        });
+        if (window.innerWidth < 768 && sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+        }
+        
+        if (currentAuthUser) { 
+            if (sectionId === 'dashboard') updateDashboardDisplay();
+            if (sectionId === 'market') loadAndRenderMarketTabs();
+            if (sectionId === 'transactions') renderTransactions();
+            if (sectionId === 'deeds') renderDeeds();
+            if (sectionId === 'admin' && currentUserData.role === 'teacher') loadAdminData();
+        }
+    }
+    
+    document.getElementById('switchToRegister').addEventListener('click', (e) => { e.preventDefault(); showSection('register', true); });
+    document.getElementById('switchToLogin').addEventListener('click', (e) => { e.preventDefault(); showSection('login', true); });
+
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (link.dataset.section === 'login' && currentAuthUser) { 
+                signOut(auth).catch(error => console.error("Logout error:", error));
+            } else {
+                showSection(link.dataset.section);
+            }
+        });
+    });
+    
+    quickActionButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            showSection(button.dataset.section);
+        });
+    });
+
+    // --- Firebase Auth State Change ---
+    onAuthStateChanged(auth, async (user) => {
+        currentAuthUser = user;
+        if (user) {
+            console.log("User logged in:", user.uid, user.email, user.displayName);
+            loggedInUserDisplay.textContent = user.displayName || user.email;
+            loginLinkText.textContent = '로그아웃';
+            loginLink.dataset.section = 'logout'; 
+
+            await loadCurrentUserData(user.uid); 
+            attachRealtimeListeners(user.uid); 
+            
+            if (currentUserData && currentUserData.role === 'teacher') {
+                adminNavLink.classList.remove('hidden');
+                adminDivider.classList.remove('hidden');
+            } else {
+                adminNavLink.classList.add('hidden');
+                adminDivider.classList.add('hidden');
+            }
+            
+            showSection('dashboard'); 
+        } else {
+            console.log("User logged out or not logged in.");
+            loggedInUserDisplay.textContent = '로그인 필요';
+            loginLinkText.textContent = '로그인';
+            loginLink.dataset.section = 'login';
+            adminNavLink.classList.add('hidden');
+            adminDivider.classList.add('hidden');
+
+
+            currentUserData = null; 
+            detachRealtimeListeners(); 
+            clearDashboard(); 
+            showSection('login', true); 
+        }
+    });
+
+    function clearDashboard() {
+        currentBalanceEl.textContent = formatCurrency(0);
+        totalAssetValueEl.textContent = formatCurrency(0);
+        if (assetChartInstance) assetChartInstance.destroy();
+        transactionListEl.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-stone-500">로그인이 필요합니다.</td></tr>';
+        deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">로그인이 필요합니다.</li>';
+    }
+
+
+    // --- Firebase Firestore Data Loading ---
+    async function loadCurrentUserData(userId) {
+        const userDocRef = doc(db, "users", userId);
+        try {
+            const docSnap = await getDoc(userDocRef);
+            if (docSnap.exists()) {
+                currentUserData = { id: docSnap.id, ...docSnap.data() };
+                console.log("Current user data loaded:", currentUserData);
+                if (!currentUserData.portfolio) currentUserData.portfolio = {}; 
+                if (!currentUserData.transactions) currentUserData.transactions = [];
+                if (!currentUserData.deeds) currentUserData.deeds = [];
+                updateDashboardDisplay();
+            } else {
+                console.log("No such user document! Creating one for new user.");
+                currentUserData = { 
+                    id: userId, 
+                    name: currentAuthUser.displayName || "새 사용자", 
+                    email: currentAuthUser.email, 
+                    balance: 50000, 
+                    portfolio: {}, 
+                    transactions: [], 
+                    deeds: [],
+                    role: 'student', // 기본 역할은 학생
+                    createdAt: serverTimestamp() 
+                };
+                await setDoc(userDocRef, {
+                    uid: userId, 
+                    name: currentUserData.name,
+                    email: currentUserData.email,
+                    balance: currentUserData.balance,
+                    portfolio: currentUserData.portfolio,
+                    role: currentUserData.role,
+                    createdAt: currentUserData.createdAt
+                });
+                console.log("Created new user document for:", userId);
+                updateDashboardDisplay(); 
+            }
+        } catch (error) {
+            console.error("Error loading user data:", error);
+            showInfoModal("오류", "사용자 정보를 불러오는 데 실패했습니다.");
+        }
+    }
+    
+    function attachRealtimeListeners(userId) {
+        detachRealtimeListeners();
+
+        const userDocRef = doc(db, "users", userId);
+        unsubscribePortfolioListener = onSnapshot(userDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                currentUserData = { ...currentUserData, ...data, id: docSnap.id }; 
+                if (!currentUserData.portfolio) currentUserData.portfolio = {};
+                console.log("Realtime user data update:", currentUserData);
+                if (document.getElementById('dashboard').classList.contains('hidden') === false) {
+                    updateDashboardDisplay();
+                }
+                const activeStockTab = document.querySelector('#market .tab-button.active');
+                if (activeStockTab && document.getElementById('market').classList.contains('hidden') === false) {
+                    const stockIdToRender = Object.keys(stockDataCache).find(id => stockDataCache[id].name === activeStockTab.textContent);
+                    if(stockIdToRender) renderStockDetails(stockIdToRender);
+                }
+                 // Update admin link visibility based on role
+                if (currentUserData && currentUserData.role === 'teacher') {
+                    adminNavLink.classList.remove('hidden');
+                    adminDivider.classList.remove('hidden');
+                } else {
+                    adminNavLink.classList.add('hidden');
+                    adminDivider.classList.add('hidden');
+                }
+            }
+        }, (error) => {
+            console.error("Error in user data onSnapshot:", error);
+        });
+
+        const transactionsQuery = query(collection(db, "users", userId, "transactions")); 
+        unsubscribeTransactionsListener = onSnapshot(transactionsQuery, (querySnapshot) => {
+            const transactions = [];
+            querySnapshot.forEach((doc) => {
+                transactions.push({ id: doc.id, ...doc.data() });
+            });
+            if(currentUserData) { 
+                currentUserData.transactions = transactions.sort((a, b) => b.date.toMillis() - a.date.toMillis()); 
+            }
+            if (document.getElementById('transactions').classList.contains('hidden') === false) {
+                renderTransactions();
+            }
+        }, (error) => {
+            console.error("Error in transactions onSnapshot:", error);
+        });
+
+        const deedsQuery = query(collection(db, "users", userId, "deeds")); 
+        unsubscribeDeedsListener = onSnapshot(deedsQuery, (querySnapshot) => {
+            const deeds = [];
+            querySnapshot.forEach((doc) => {
+                deeds.push({ id: doc.id, ...doc.data() });
+            });
+             if(currentUserData) { 
+                currentUserData.deeds = deeds.sort((a, b) => b.date.toMillis() - a.date.toMillis()); 
+            }
+            if (document.getElementById('deeds').classList.contains('hidden') === false) {
+                renderDeeds();
+            }
+        }, (error) => {
+            console.error("Error in deeds onSnapshot:", error);
+        });
+
+        const stocksQuery = query(collection(db, "stocks"));
+        unsubscribeStockListeners['all'] = onSnapshot(stocksQuery, (querySnapshot) => {
+            let updated = false;
+            querySnapshot.forEach((doc) => {
+                const stockId = doc.id;
+                const newStockData = { id: doc.id, ...doc.data() };
+                if (JSON.stringify(stockDataCache[stockId]) !== JSON.stringify(newStockData)) {
+                    updated = true;
+                }
+                stockDataCache[stockId] = newStockData;
+            });
+            console.log("Stock data cache updated:", stockDataCache);
+            if (updated && document.getElementById('market').classList.contains('hidden') === false) {
+                loadAndRenderMarketTabs(); 
+            }
+            if (updated && document.getElementById('dashboard').classList.contains('hidden') === false) {
+                updateDashboardDisplay(); 
+            }
+        }, (error) => {
+            console.error("Error in stocks onSnapshot:", error);
+        });
+    }
+
+    function detachRealtimeListeners() {
+        if (unsubscribePortfolioListener) unsubscribePortfolioListener();
+        if (unsubscribeTransactionsListener) unsubscribeTransactionsListener();
+        if (unsubscribeDeedsListener) unsubscribeDeedsListener();
+        Object.values(unsubscribeStockListeners).forEach(unsub => unsub());
+        unsubscribeStockListeners = {};
+    }
+
+    // --- Gemini API Call Function ---
+    async function generateTextViaGemini(prompt) {
+        showAiModal("✨ AI가 열심히 생각하고 있어요...");
+        const apiKey = ""; 
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        
+        let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+        const payload = { contents: chatHistory };
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                let errorDetails = `API 요청 실패 (상태 코드: ${response.status})`;
+                try {
+                    const errorResult = await response.json();
+                    if (errorResult.error && errorResult.error.message) {
+                        errorDetails += ` - ${errorResult.error.message}`;
+                    }
+                } catch (e) { /* Ignore */ }
+                throw new Error(errorDetails);
+            }
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                updateAiModalContent(result.candidates[0].content.parts[0].text);
+            } else {
+                console.error("Gemini API response format error:", result);
+                updateAiModalContent("AI가 응답을 생성하는 데 실패했어요. 응답 형식이 올바르지 않아요.");
+            }
+        } catch (error) {
+            console.error("Error calling Gemini API:", error);
+            updateAiModalContent(`AI와 연결하는 데 문제가 발생했어요: ${error.message}. 잠시 후 다시 시도해주세요.`);
+        }
+    }
+
+    // --- Authentication Logic ---
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = loginForm.email.value;
+        const password = loginForm.password.value;
+        authErrorEl.classList.add('hidden');
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            console.error("Login error:", error);
+            authErrorEl.textContent = `로그인 실패: ${mapAuthErrorCodeToMessage(error.code)}`;
+            authErrorEl.classList.remove('hidden');
+        }
+    });
+
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = registerForm.name.value;
+        const email = registerForm.email.value;
+        const password = registerForm.password.value;
+        registerAuthErrorEl.classList.add('hidden');
+
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+            
+            await updateProfile(user, { displayName: name });
+
+            const userDocRef = doc(db, "users", user.uid);
+            await setDoc(userDocRef, {
+                uid: user.uid,
+                name: name,
+                email: user.email,
+                balance: 50000, 
+                portfolio: {}, 
+                role: 'student', // 기본 역할
+                createdAt: serverTimestamp()
+            });
+            showInfoModal("회원가입 성공!", "만승 경제 교실에 오신 것을 환영합니다!");
+        } catch (error) {
+            console.error("Registration error:", error);
+            registerAuthErrorEl.textContent = `회원가입 실패: ${mapAuthErrorCodeToMessage(error.code)}`;
+            registerAuthErrorEl.classList.remove('hidden');
+        }
+    });
+
+    function mapAuthErrorCodeToMessage(errorCode) {
+        switch (errorCode) {
+            case 'auth/invalid-email': return '유효하지 않은 이메일 주소입니다.';
+            case 'auth/user-disabled': return '사용 중지된 계정입니다.';
+            case 'auth/user-not-found': return '사용자를 찾을 수 없습니다.';
+            case 'auth/wrong-password': return '잘못된 비밀번호입니다.';
+            case 'auth/email-already-in-use': return '이미 사용 중인 이메일 주소입니다.';
+            case 'auth/weak-password': return '비밀번호는 6자 이상이어야 합니다.';
+            case 'auth/operation-not-allowed': return '이메일/비밀번호 로그인이 활성화되지 않았습니다.';
+            default: return errorCode;
+        }
+    }
+
+
+    // --- Dashboard Logic ---
+    function updateDashboardDisplay() {
+        if (!currentUserData) return;
+        currentBalanceEl.textContent = formatCurrency(currentUserData.balance || 0);
+        let stockValue = 0;
+        if (currentUserData.portfolio) {
+            for (const stockId in currentUserData.portfolio) {
+                const quantity = currentUserData.portfolio[stockId] || 0;
+                const stockPrice = stockDataCache[stockId]?.price || 0;
+                stockValue += quantity * stockPrice;
+            }
+        }
+        totalAssetValueEl.textContent = formatCurrency((currentUserData.balance || 0) + stockValue);
+        renderAssetAllocationChart();
+    }
+
+    function renderAssetAllocationChart() {
+        if (!currentUserData || !stockDataCache) return;
+        const ctx = document.getElementById('assetAllocationChart').getContext('2d');
+        const labels = ['현금'];
+        const data = [currentUserData.balance || 0];
+        const backgroundColors = ['rgba(54, 162, 235, 0.7)']; 
+
+        if (currentUserData.portfolio) {
+            for (const stockId in currentUserData.portfolio) {
+                const quantity = currentUserData.portfolio[stockId];
+                if (quantity > 0 && stockDataCache[stockId]) {
+                    labels.push(stockDataCache[stockId].name);
+                    data.push(quantity * stockDataCache[stockId].price);
+                    backgroundColors.push(stockDataCache[stockId].color || getRandomColor());
+                }
+            }
+        }
+        
+        if (assetChartInstance) {
+            assetChartInstance.destroy();
+        }
+
+        if (data.every(val => val === 0) && data.length > 1 && data[0] === 0) { 
+             assetChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['자산 없음'],
+                    datasets: [{ data: [1], backgroundColor: ['rgba(200, 200, 200, 0.7)'] }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function(context) { return ' 자산을 늘려보세요!'; }}}}
+                }
+            });
+        } else {
+             assetChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '자산 구성', data: data, backgroundColor: backgroundColors,
+                        borderColor: backgroundColors.map(color => color.replace('0.7', '1')), borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) { label += ': '; }
+                            if (context.parsed !== null) { label += formatCurrency(context.parsed); }
+                            return label;
+                        }
+                    }}}
+                }
+            });
+        }
+    }
+    function getRandomColor() { 
+        const r = Math.floor(Math.random() * 200);
+        const g = Math.floor(Math.random() * 200);
+        const b = Math.floor(Math.random() * 200);
+        return `rgba(${r}, ${g}, ${b}, 0.7)`;
+    }
+
+
+    // --- Transfer Logic ---
+    async function populateRecipientSelect() {
+        // This function is not used anymore as we use email input for recipient.
+    }
+
+    transferForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentAuthUser || !currentUserData) {
+            showInfoModal('오류', '로그인이 필요합니다.');
+            return;
+        }
+
+        const recipientEmail = recipientInput.value.trim(); 
+        const amount = parseInt(transferAmount.value);
+        const memo = transferMemo.value || '계좌이체';
+
+        if (!recipientEmail) { showInfoModal('오류', '받는 사람 이메일을 입력해주세요.'); return; }
+        if (recipientEmail === currentAuthUser.email) { showInfoModal('오류', '자기 자신에게 이체할 수 없습니다.'); return; }
+        if (isNaN(amount) || amount <= 0) { showInfoModal('오류', '올바른 금액을 입력해주세요.'); return; }
+        if (amount > currentUserData.balance) { showInfoModal('오류', '잔액이 부족합니다.'); return; }
+
+        try {
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("email", "==", recipientEmail));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                showInfoModal('오류', '받는 사람을 찾을 수 없습니다. 이메일을 확인해주세요.');
+                return;
+            }
+            
+            const recipientDoc = querySnapshot.docs[0]; 
+            const recipientId = recipientDoc.id;
+            const recipientData = recipientDoc.data();
+
+            await runTransaction(db, async (transaction) => {
+                const senderDocRef = doc(db, "users", currentAuthUser.uid);
+                const recipientDocRef = doc(db, "users", recipientId);
+
+                const senderSnap = await transaction.get(senderDocRef);
+                if (!senderSnap.exists() || senderSnap.data().balance < amount) {
+                    throw new Error("잔액이 부족합니다.");
+                }
+
+                transaction.update(senderDocRef, { balance: increment(-amount) });
+                transaction.update(recipientDocRef, { balance: increment(amount) });
+
+                const senderTxRef = collection(db, "users", currentAuthUser.uid, "transactions");
+                transaction.set(doc(senderTxRef), {
+                    type: 'transfer_out',
+                    description: `${recipientData.name}(${recipientEmail})에게 송금 (${memo})`,
+                    amount: amount,
+                    date: serverTimestamp(),
+                    counterpartyName: recipientData.name,
+                    counterpartyEmail: recipientEmail
+                });
+
+                const recipientTxRef = collection(db, "users", recipientId, "transactions");
+                transaction.set(doc(recipientTxRef), {
+                    type: 'transfer_in',
+                    description: `${currentUserData.name}(${currentAuthUser.email})으로부터 입금 (${memo})`,
+                    amount: amount,
+                    date: serverTimestamp(),
+                    counterpartyName: currentUserData.name,
+                    counterpartyEmail: currentAuthUser.email
+                });
+            });
+
+            showInfoModal('성공', `${recipientData.name}님에게 ${formatCurrency(amount)}을 보냈습니다.`);
+            transferForm.reset();
+
+        } catch (error) {
+            console.error("Transfer error: ", error);
+            showInfoModal('이체 실패', `이체 중 오류가 발생했습니다: ${error.message}`);
+        }
+    });
+
+    // --- Market Logic ---
+    async function loadAndRenderMarketTabs() {
+        if (!currentAuthUser) return;
+        marketTabsContainer.innerHTML = '<p class="text-sm text-stone-500">주식 정보 로딩 중...</p>';
+        
+        if (Object.keys(stockDataCache).length === 0) {
+             try {
+                const stocksQuery = query(collection(db, "stocks"));
+                const querySnapshot = await getDocs(stocksQuery);
+                querySnapshot.forEach((docSnap) => {
+                    stockDataCache[docSnap.id] = { id: docSnap.id, ...docSnap.data() };
+                });
+            } catch (error) {
+                console.error("Error fetching stocks manually:", error);
+                marketTabsContainer.innerHTML = '<p class="text-sm text-red-500">주식 정보를 불러오는데 실패했습니다.</p>';
+                return;
+            }
+        }
+
+        marketTabsContainer.innerHTML = ''; 
+        const stockIds = Object.keys(stockDataCache);
+
+        if (stockIds.length === 0) {
+            marketTabsContainer.innerHTML = '<p class="text-sm text-stone-500">거래 가능한 주식이 없습니다.</p>';
+            marketContentContainer.innerHTML = '';
+            return;
+        }
+        
+        stockIds.forEach((stockId, index) => {
+            const stock = stockDataCache[stockId];
+            const tabButton = document.createElement('button');
+            tabButton.className = `tab-button py-3 px-1 border-b-2 border-transparent text-stone-500 hover:text-teal-600 hover:border-teal-600 whitespace-nowrap text-sm font-medium`;
+            tabButton.textContent = stock.name;
+            tabButton.onclick = () => {
+                document.querySelectorAll('#market .tab-button').forEach(btn => btn.classList.remove('active'));
+                tabButton.classList.add('active');
+                renderStockDetails(stockId);
+            };
+            marketTabsContainer.appendChild(tabButton);
+            if (index === 0) { 
+                tabButton.classList.add('active');
+                renderStockDetails(stockId);
+            }
+        });
+    }
+
+    function renderStockDetails(stockId) {
+        if (!currentUserData || !stockDataCache[stockId]) {
+             marketContentContainer.innerHTML = '<p class="text-center text-stone-500">주식 정보를 불러올 수 없습니다.</p>';
+            return;
+        }
+        const stock = stockDataCache[stockId];
+        const userHoldings = currentUserData.portfolio?.[stockId] || 0;
+        const holdingValue = userHoldings * stock.price;
+
+        marketContentContainer.innerHTML = `
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                    <div>
+                        <h3 class="text-2xl font-bold text-teal-700">${stock.name}</h3>
+                        <p class="text-4xl font-bold" style="color: ${stock.color || getRandomColor()}">${formatCurrency(stock.price)}</p>
+                    </div>
+                    <div class="text-right mt-2 md:mt-0">
+                        <p class="text-sm text-stone-500">나의 보유량: <span class="font-semibold">${userHoldings} 주</span></p>
+                        <p class="text-sm text-stone-500">평가액: <span class="font-semibold">${formatCurrency(holdingValue)}</span></p>
+                         <button id="aiStockAnalysisBtn-${stockId}" data-stock-id="${stockId}" class="mt-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-3 rounded-lg text-sm transition-transform hover:scale-105">✨ AI 종목 분석</button>
+                    </div>
+                </div>
+
+                <div class="chart-container h-64 md:h-80 mb-6">
+                    <canvas id="stockChart-${stockId}"></canvas>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-lg font-semibold text-teal-600 mb-2">매수 (사기)</h4>
+                        <form id="buyForm-${stockId}" class="space-y-3">
+                            <input type="hidden" name="stockId" value="${stockId}">
+                            <div>
+                                <label for="buyQuantity-${stockId}" class="block text-sm font-medium text-stone-700">수량</label>
+                                <input type="number" id="buyQuantity-${stockId}" name="quantity" min="1" required class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
+                            </div>
+                            <p class="text-sm">예상 금액: <span id="buyEstimate-${stockId}">0 원</span></p>
+                            <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-3 rounded-lg">매수</button>
+                        </form>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-semibold text-red-600 mb-2">매도 (팔기)</h4>
+                        <form id="sellForm-${stockId}" class="space-y-3">
+                            <input type="hidden" name="stockId" value="${stockId}">
+                            <div>
+                                <label for="sellQuantity-${stockId}" class="block text-sm font-medium text-stone-700">수량</label>
+                                <input type="number" id="sellQuantity-${stockId}" name="quantity" min="1" max="${userHoldings}" ${userHoldings === 0 ? 'disabled' : ''} required class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500">
+                            </div>
+                             <p class="text-sm">예상 금액: <span id="sellEstimate-${stockId}">0 원</span></p>
+                            <button type="submit" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg" ${userHoldings === 0 ? 'disabled' : ''}>매도</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        renderStockChart(stockId, stock.history || [], stock.color || getRandomColor());
+
+        const buyQuantityInput = document.getElementById(`buyQuantity-${stockId}`);
+        const buyEstimateEl = document.getElementById(`buyEstimate-${stockId}`);
+        buyQuantityInput.addEventListener('input', () => {
+            const quantity = parseInt(buyQuantityInput.value) || 0;
+            buyEstimateEl.textContent = formatCurrency(quantity * stock.price);
+        });
+
+        const sellQuantityInput = document.getElementById(`sellQuantity-${stockId}`);
+        const sellEstimateEl = document.getElementById(`sellEstimate-${stockId}`);
+        if (sellQuantityInput) { 
+            sellQuantityInput.addEventListener('input', () => {
+                const quantity = parseInt(sellQuantityInput.value) || 0;
+                sellEstimateEl.textContent = formatCurrency(quantity * stock.price);
+            });
+        }
+        
+        document.getElementById(`buyForm-${stockId}`).addEventListener('submit', handleBuyStock);
+        const sellForm = document.getElementById(`sellForm-${stockId}`);
+        if (sellForm) sellForm.addEventListener('submit', handleSellStock);
+        document.getElementById(`aiStockAnalysisBtn-${stockId}`).addEventListener('click', handleAiStockAnalysis);
+    }
+
+    async function handleAiStockAnalysis(e) {
+        const stockId = e.target.dataset.stockId;
+        const stockName = stockDataCache[stockId].name;
+        const prompt = `초등학생을 위한 ${stockName}에 대한 짧고 재미있는 이야기를 만들어줘. 예를 들어, ${stockName}이 왜 오르거나 내릴 수 있는지, 또는 ${stockName}과 관련된 재미있는 상상을 덧붙여서 이야기해줘. 긍정적이고 희망찬 내용으로 작성해줘. 100자 이내로 짧게 부탁해.`;
+        generateTextViaGemini(prompt);
+    }
+    
+    function renderStockChart(stockId, historyData, color) {
+        const ctx = document.getElementById(`stockChart-${stockId}`).getContext('2d');
+        if (stockChartInstances[stockId]) {
+            stockChartInstances[stockId].destroy();
+        }
+        const labels = historyData.map((_, index) => `T-${historyData.length - 1 - index}`); 
+
+        stockChartInstances[stockId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `${stockDataCache[stockId].name} 가격 변동`, data: historyData,
+                    borderColor: color.replace('0.7', '1'), backgroundColor: color,
+                    tension: 0.1, fill: true,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: false, ticks: { callback: function(value) { return formatCurrency(value); }}},
+                    x: { ticks: { maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 7 } }
+                },
+                plugins: { legend: { display: false }, tooltip: { callbacks: {
+                    label: function(context) { return formatCurrency(context.parsed.y); },
+                    title: function(context) { 
+                        const title = context[0].label; const maxLength = 16;
+                        if (title.length > maxLength) { return title.match(new RegExp('.{1,' + maxLength + '}', 'g'));}
+                        return title;
+                    }
+                }}}
+            }
+        });
+    }
+
+    async function handleBuyStock(e) {
+        e.preventDefault();
+        if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; }
+
+        const stockId = e.target.stockId.value;
+        const quantity = parseInt(e.target.quantity.value);
+        const stock = stockDataCache[stockId];
+        if (!stock) { showInfoModal('오류', '주식 정보를 찾을 수 없습니다.'); return; }
+        const cost = quantity * stock.price;
+
+        if (isNaN(quantity) || quantity <= 0) { showInfoModal('오류', '올바른 수량을 입력해주세요.'); return; }
+        if (cost > currentUserData.balance) { showInfoModal('오류', '잔액이 부족합니다.'); return; }
+
+        try {
+            const userDocRef = doc(db, "users", currentAuthUser.uid);
+            await runTransaction(db, async (transaction) => {
+                const userSnap = await transaction.get(userDocRef);
+                if (!userSnap.exists() || userSnap.data().balance < cost) {
+                    throw new Error("잔액이 부족합니다. (트랜잭션 확인)");
+                }
+
+                const newPortfolio = { ...userSnap.data().portfolio };
+                newPortfolio[stockId] = (newPortfolio[stockId] || 0) + quantity;
+
+                transaction.update(userDocRef, {
+                    balance: increment(-cost),
+                    portfolio: newPortfolio
+                });
+
+                const txColRef = collection(db, "users", currentAuthUser.uid, "transactions");
+                transaction.set(doc(txColRef), {
+                    type: 'buy',
+                    description: `${stock.name} ${quantity}주 매수`,
+                    amount: cost,
+                    stockId: stockId,
+                    quantity: quantity,
+                    pricePerStock: stock.price,
+                    date: serverTimestamp()
+                });
+            });
+            showInfoModal('매수 성공', `${stock.name} ${quantity}주를 ${formatCurrency(cost)}에 매수했습니다.`);
+            e.target.reset();
+            document.getElementById(`buyEstimate-${stockId}`).textContent = '0 원';
+        } catch (error) {
+            console.error("Buy stock error:", error);
+            showInfoModal('매수 실패', `매수 중 오류 발생: ${error.message}`);
+        }
+    }
+
+    async function handleSellStock(e) {
+        e.preventDefault();
+        if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; }
+
+        const stockId = e.target.stockId.value;
+        const quantity = parseInt(e.target.quantity.value);
+        const stock = stockDataCache[stockId];
+        if (!stock) { showInfoModal('오류', '주식 정보를 찾을 수 없습니다.'); return; }
+        
+        const currentHoldings = currentUserData.portfolio?.[stockId] || 0;
+        if (isNaN(quantity) || quantity <= 0) { showInfoModal('오류', '올바른 수량을 입력해주세요.'); return; }
+        if (quantity > currentHoldings) { showInfoModal('오류', '보유 수량이 부족합니다.'); return; }
+        
+        const income = quantity * stock.price;
+
+        try {
+            const userDocRef = doc(db, "users", currentAuthUser.uid);
+            await runTransaction(db, async (transaction) => {
+                const userSnap = await transaction.get(userDocRef);
+                if (!userSnap.exists()) throw new Error("사용자 정보를 찾을 수 없습니다.");
+                
+                const userPortfolio = userSnap.data().portfolio || {};
+                if ((userPortfolio[stockId] || 0) < quantity) {
+                    throw new Error("보유 수량이 부족합니다. (트랜잭션 확인)");
+                }
+
+                const newPortfolio = { ...userPortfolio };
+                newPortfolio[stockId] -= quantity;
+                if (newPortfolio[stockId] === 0) delete newPortfolio[stockId];
+
+
+                transaction.update(userDocRef, {
+                    balance: increment(income),
+                    portfolio: newPortfolio
+                });
+
+                const txColRef = collection(db, "users", currentAuthUser.uid, "transactions");
+                transaction.set(doc(txColRef), {
+                    type: 'sell',
+                    description: `${stock.name} ${quantity}주 매도`,
+                    amount: income,
+                    stockId: stockId,
+                    quantity: quantity,
+                    pricePerStock: stock.price,
+                    date: serverTimestamp()
+                });
+            });
+            showInfoModal('매도 성공', `${stock.name} ${quantity}주를 ${formatCurrency(income)}에 매도했습니다.`);
+            e.target.reset();
+            document.getElementById(`sellEstimate-${stockId}`).textContent = '0 원';
+        } catch (error) {
+            console.error("Sell stock error:", error);
+            showInfoModal('매도 실패', `매도 중 오류 발생: ${error.message}`);
+        }
+    }
+
+
+    // --- Deeds Logic ---
+    deedForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; }
+
+        const description = deedDescriptionEl.value.trim();
+        if (!description) {
+            showInfoModal('오류', '선행 내용을 입력해주세요.');
+            return;
+        }
+        const reward = 1000;
+        
+        try {
+            const userDocRef = doc(db, "users", currentAuthUser.uid);
+            await updateDoc(userDocRef, {
+                balance: increment(reward)
+            });
+
+            const deedsColRef = collection(db, "users", currentAuthUser.uid, "deeds");
+            await addDoc(deedsColRef, {
+                description: description,
+                reward: reward,
+                status: 'approved', 
+                date: serverTimestamp()
+            });
+            
+            const txColRef = collection(db, "users", currentAuthUser.uid, "transactions");
+            await addDoc(txColRef, {
+                type: 'deed',
+                description: `선행보상: ${description.substring(0,20)}...`,
+                amount: reward,
+                date: serverTimestamp()
+            });
+
+            showInfoModal('선행 등록 완료', `"${description.substring(0,30)}..." 선행으로 ${formatCurrency(reward)}이 입금되었습니다!`);
+            deedForm.reset();
+        } catch (error) {
+            console.error("Deed submission error:", error);
+            showInfoModal("선행 등록 실패", "선행 등록 중 오류가 발생했습니다.");
+        }
+    });
+
+    function renderDeeds() {
+        if (!currentUserData || !currentUserData.deeds) {
+            deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">선행 기록을 불러오는 중...</li>';
+            return;
+        }
+        deedListEl.innerHTML = '';
+        if (currentUserData.deeds.length === 0) {
+            deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">등록된 선행이 없습니다.</li>';
+            return;
+        }
+        currentUserData.deeds.forEach(deed => { 
+            const li = document.createElement('li');
+            li.className = 'p-4 bg-white rounded-lg shadow-sm border border-stone-200 flex justify-between items-center';
+            
+            const deedTextDiv = document.createElement('div');
+            deedTextDiv.innerHTML = `
+                <p class="font-medium text-stone-700">${deed.description}</p>
+                <p class="text-xs text-stone-500">${formatDate(deed.date)} - ${formatCurrency(deed.reward)}</p>
+            `;
+
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.className = 'flex flex-col sm:flex-row items-end space-y-2 sm:space-y-0 sm:space-x-2';
+            
+            const statusSpan = document.createElement('span');
+            statusSpan.className = `text-xs font-semibold ${deed.status === 'approved' ? 'text-green-600 bg-green-100' : 'text-amber-600 bg-amber-100'} px-2 py-1 rounded-full mb-2 sm:mb-0`;
+            statusSpan.textContent = deed.status === 'approved' ? '보상완료' : '승인대기';
+            
+            const aiButton = document.createElement('button');
+            aiButton.className = 'bg-purple-500 hover:bg-purple-600 text-white font-semibold py-1 px-2 rounded-lg text-xs transition-transform hover:scale-105';
+            aiButton.innerHTML = '✨ 이야기 확장';
+            aiButton.onclick = () => handleAiDeedStory(deed.description);
+
+            buttonsDiv.appendChild(statusSpan);
+            buttonsDiv.appendChild(aiButton);
+            
+            li.appendChild(deedTextDiv);
+            li.appendChild(buttonsDiv);
+            deedListEl.appendChild(li);
+        });
+    }
+
+    async function handleAiDeedStory(deedDescription) {
+        const prompt = `초등학생이 작성한 "${deedDescription}"라는 선행 내용이 있습니다. 이 선행을 바탕으로, 어린이가 이해하기 쉽고 긍정적인 칭찬과 함께 이야기를 조금 더 구체적이고 재미있게 확장해주세요. 예를 들어, 그 선행이 다른 사람에게 어떤 좋은 영향을 주었는지, 또는 그 선행을 통해 무엇을 배웠는지 등을 포함할 수 있습니다. 150자 이내로 작성해주세요.`;
+        generateTextViaGemini(prompt);
+    }
+
+    // --- Transactions Logic ---
+    function renderTransactions() {
+        if (!currentUserData || !currentUserData.transactions) {
+            transactionListEl.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-stone-500">거래 내역을 불러오는 중...</td></tr>';
+            return;
+        }
+        transactionListEl.innerHTML = '';
+        const filterValue = transactionFilterEl.value;
+        const filteredTransactions = currentUserData.transactions.filter(tx => {
+            if (filterValue === 'all') return true;
+            return tx.type === filterValue;
+        }); 
+
+        if (filteredTransactions.length === 0) {
+            transactionListEl.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-stone-500">해당 종류의 거래 내역이 없습니다.</td></tr>';
+            return;
+        }
+
+        filteredTransactions.forEach(tx => {
+            const tr = document.createElement('tr');
+            let amountDisplay = '';
+            let balanceAfterTxDisplay = 'N/A'; 
+
+            switch (tx.type) {
+                case 'transfer_in':
+                    amountDisplay = `<span class="text-sky-600 font-semibold">+${formatCurrency(tx.amount)}</span>`;
+                    break;
+                case 'transfer_out':
+                    amountDisplay = `<span class="text-red-600 font-semibold">-${formatCurrency(tx.amount)}</span>`;
+                    break;
+                case 'buy':
+                    amountDisplay = `<span class="text-red-600">${formatCurrency(tx.amount)} (${tx.quantity}주)</span>`;
+                    break;
+                case 'sell':
+                    amountDisplay = `<span class="text-sky-600">+${formatCurrency(tx.amount)} (${tx.quantity}주)</span>`;
+                    break;
+                case 'deed':
+                    amountDisplay = `<span class="text-amber-600 font-semibold">+${formatCurrency(tx.amount)}</span>`;
+                    break;
+                default:
+                    amountDisplay = formatCurrency(tx.amount);
+            }
+            
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">${formatDate(tx.date)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-900">${getTransactionTypeKorean(tx.type)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">${tx.description}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right">${amountDisplay}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-stone-500">${balanceAfterTxDisplay}</td>
+            `;
+            transactionListEl.appendChild(tr);
+        });
+    }
+    
+    function getTransactionTypeKorean(type) {
+        switch (type) {
+            case 'transfer_in': return '입금';
+            case 'transfer_out': return '출금';
+            case 'buy': return '주식매수';
+            case 'sell': return '주식매도';
+            case 'deed': return '선행보상';
+            default: return type;
+        }
+    }
+
+    transactionFilterEl.addEventListener('change', renderTransactions);
+
+    // --- Admin Logic ---
+    async function loadAdminData() {
+        if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') {
+            adminStudentListEl.innerHTML = '<li>관리자 권한이 필요합니다.</li>';
+            return;
+        }
+        
+        adminStudentListEl.innerHTML = '<li>학생 정보 로딩 중...</li>';
+        try {
+            const usersSnapshot = await getDocs(collection(db, "users"));
+            adminStudentListEl.innerHTML = ''; // Clear previous list
+            usersSnapshot.forEach(docSnap => {
+                const student = docSnap.data();
+                const studentId = docSnap.id;
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center py-1";
+                li.innerHTML = `
+                    <span>${student.name} (${student.email}) - UID: ${studentId.substring(0,8)}... - 잔액: ${formatCurrency(student.balance)}</span>
+                    <button data-studentid="${studentId}" data-studentname="${student.name}" data-currentbalance="${student.balance}" class="admin-adjust-balance-btn bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 px-2 rounded">잔액 조정</button>
+                `;
+                adminStudentListEl.appendChild(li);
+            });
+            document.querySelectorAll('.admin-adjust-balance-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const studentId = e.target.dataset.studentid;
+                    const studentName = e.target.dataset.studentname;
+                    const currentBalance = parseFloat(e.target.dataset.currentbalance);
+                    showAdminAdjustBalanceModal(studentId, studentName, currentBalance);
+                });
+            });
+
+        } catch (error) {
+            console.error("Error loading students for admin:", error);
+            adminStudentListEl.innerHTML = '<li>학생 정보 로드 실패</li>';
+        }
+
+        const adminStockSelect = document.getElementById('adminStockSelect');
+        adminStockSelect.innerHTML = '<option value="">-- 주식 선택 --</option>';
+        Object.keys(stockDataCache).forEach(stockId => {
+            const option = document.createElement('option');
+            option.value = stockId;
+            option.textContent = stockDataCache[stockId].name;
+            adminStockSelect.appendChild(option);
+        });
+    }
+    
+    adminConfirmAdjustBalanceBtn.addEventListener('click', async () => {
+        if (!studentIdToAdjust) return;
+
+        const amount = parseInt(adminAdjustmentAmountInput.value);
+        const reason = adminAdjustmentReasonInput.value.trim() || "관리자 잔액 조정";
+
+        if (isNaN(amount)) {
+            showInfoModal("오류", "유효한 조정 금액을 입력하세요.");
+            return;
+        }
+
+        try {
+            const studentDocRef = doc(db, "users", studentIdToAdjust);
+            await updateDoc(studentDocRef, {
+                balance: increment(amount)
+            });
+
+            // 관리자 조정 거래 내역 추가 (학생 계정)
+            const txColRef = collection(db, "users", studentIdToAdjust, "transactions");
+            await addDoc(txColRef, {
+                type: amount >= 0 ? 'admin_credit' : 'admin_debit',
+                description: reason,
+                amount: Math.abs(amount), // 항상 양수로 기록, 타입으로 구분
+                date: serverTimestamp()
+            });
+
+            showInfoModal("성공", "학생 잔액이 성공적으로 조정되었습니다.");
+            closeAdminAdjustBalanceModal();
+            loadAdminData(); // 목록 새로고침
+        } catch (error) {
+            console.error("Error adjusting student balance:", error);
+            showInfoModal("오류", `잔액 조정 중 오류 발생: ${error.message}`);
+        }
+    });
+
+
+    document.getElementById('randomizePricesBtn').addEventListener('click', async () => {
+        if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') { 
+            showInfoModal("오류", "관리자 권한이 필요합니다."); return; 
+        }
+        showInfoModal("진행 중", "주가 변경 중...");
+        try {
+            for (const stockId in stockDataCache) {
+                const stock = stockDataCache[stockId];
+                const changePercent = (Math.random() - 0.45) * 0.15; 
+                let newPrice = Math.round(stock.price * (1 + changePercent));
+                if (newPrice < 100) newPrice = 100; 
+                
+                const newHistory = [...(stock.history || [])];
+                newHistory.push(newPrice);
+                if (newHistory.length > 20) newHistory.shift();
+
+                const stockDocRef = doc(db, "stocks", stockId);
+                await updateDoc(stockDocRef, { 
+                    price: newPrice,
+                    history: newHistory 
+                });
+            }
+            showInfoModal('알림', '모든 주식/금 가격이 임의로 변경되었습니다.');
+        } catch (error) {
+            console.error("Error randomizing prices:", error);
+            showInfoModal("오류", "주가 변경 중 오류 발생");
+        }
+    });
+
+    document.getElementById('adminUpdatePriceBtn').addEventListener('click', async () => {
+        if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') { 
+             showInfoModal("오류", "관리자 권한이 필요합니다."); return; 
+        }
+
+        const stockId = document.getElementById('adminStockSelect').value;
+        const newPriceStr = document.getElementById('adminNewPrice').value;
+
+        if (!stockId) { showInfoModal("오류", "가격을 변경할 주식을 선택하세요."); return; }
+        if (!newPriceStr) { showInfoModal("오류", "새로운 가격을 입력하세요."); return; }
+
+        const newPrice = parseInt(newPriceStr);
+        if (isNaN(newPrice) || newPrice < 0) { showInfoModal("오류", "유효한 가격을 입력하세요."); return; }
+        
+        try {
+            const stock = stockDataCache[stockId];
+            if (!stock) { showInfoModal("오류", "선택한 주식 정보를 찾을 수 없습니다."); return; }
+
+            const newHistory = [...(stock.history || [])];
+            newHistory.push(newPrice);
+            if (newHistory.length > 20) newHistory.shift();
+
+            const stockDocRef = doc(db, "stocks", stockId);
+            await updateDoc(stockDocRef, { 
+                price: newPrice,
+                history: newHistory
+            });
+            showInfoModal('성공', `${stock.name}의 가격이 ${formatCurrency(newPrice)}으로 변경되었습니다.`);
+            document.getElementById('adminNewPrice').value = '';
+        } catch (error) {
+            console.error("Error updating stock price by admin:", error);
+            showInfoModal("오류", "주가 변경 중 오류 발생");
+        }
+    });
+    
+    // --- Mobile Sidebar Toggle ---
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const mainContentForSidebar = document.getElementById('mainContent');
+
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+    });
+    mainContentForSidebar.addEventListener('click', () => {
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+        }
+    });
+
+    // --- Initial Load ---
+    function startManseungApp() { 
+        showSection('login', true); 
+    }
+
+    startManseungApp(); 
+
+</script>
+</body>
+</html>
