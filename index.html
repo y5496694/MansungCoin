@@ -9,10 +9,12 @@
     <!-- Visualization & Content Choices:
         - Wallet: KRW Balance (Stat), Asset Summary (Stat), Asset Allocation (Chart.js Donut). Data from Firestore.
         - Transfers: Form. Transactions logged to Firestore.
-        - Stock Market: Tabs per stock. Price/Change/Volume (Stats from Firestore), Price History (Chart.js Line from Firestore with time filters), Buy/Sell Forms (updates Firestore). AI Stock Analysis (Gemini API). Gold price via external API.
+        - Stock Market: Tabs per stock. Price/Change/Volume (Stats from Firestore), User's AvgBuyPrice & ROI, Price History (Chart.js Line with time filters), Buy/Sell Forms (updates Firestore). AI Stock Analysis (Gemini API).
         - Good Deeds: Submission Form (once per day check), Status List (data from Firestore). AI Deed Story Expansion (Gemini API).
         - Transactions: Table/List with filters (data from Firestore).
-        - Admin: Student list, stock fluctuation settings, stock price manual update.
+        - Settings: User name change.
+        - Admin: Student list with edit name/view details/reset stock buttons, stock fluctuation settings, stock price manual update.
+        - Ranking: ROI and Total Asset ranking implemented.
         - All interactions via vanilla JS. Data stored in Firestore. NO SVG/Mermaid. -->
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -113,7 +115,7 @@
             <h1 class="text-3xl font-bold font-display">만승 경제 교실</h1>
             <nav class="space-y-2">
                 <a href="#" data-section="dashboard" class="nav-link active-nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
-                    <span>🏠</span><span>내 지갑 (현황판)</span>
+                    <span>🏠</span><span>내 지갑</span>
                 </a>
                 <a href="#" data-section="transfer" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
                     <span>💸</span><span>계좌 이체</span>
@@ -127,9 +129,16 @@
                 <a href="#" data-section="transactions" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
                     <span>🧾</span><span>거래 내역</span>
                 </a>
+                <a href="#" data-section="ranking" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>🏆</span><span>랭킹</span>
+                </a>
+                <hr class="border-teal-500">
+                <a href="#" data-section="settings" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>🔧</span><span>환경 설정</span>
+                </a>
                 <hr id="adminDivider" class="border-teal-500 hidden">
                 <a href="#" id="adminNavLink" data-section="admin" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors hidden">
-                    <span>⚙️</span><span>관리자 (교사용)</span>
+                    <span>⚙️</span><span>관리자</span>
                 </a>
                  <a href="#" id="loginLink" data-section="login" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
                     <span>🔑</span><span id="loginLinkText">로그인</span>
@@ -191,7 +200,7 @@
                     <div class="bg-white p-6 rounded-xl shadow-lg">
                         <h3 class="text-xl font-semibold text-teal-700 mb-2">📊 총 자산 가치</h3>
                         <p id="totalAssetValue" class="text-4xl font-bold text-emerald-600">0 원</p>
-                        <p class="text-sm text-stone-500">(현금 + 주식/금 평가액)</p>
+                        <p class="text-sm text-stone-500">(현금 + 주식 평가액)</p>
                     </div>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-lg">
@@ -231,7 +240,7 @@
 
             <section id="market" class="hidden space-y-6">
                 <h2 class="text-3xl font-semibold text-teal-800">📈 주식 시장</h2>
-                <p class="text-stone-600">다양한 주식과 금을 사고 팔 수 있어요. 신중하게 투자하세요!</p>
+                <p class="text-stone-600">다양한 주식을 사고 팔 수 있어요. 신중하게 투자하세요!</p>
                 <div>
                     <div class="border-b border-stone-200 mb-4">
                         <nav class="-mb-px flex space-x-8" aria-label="Tabs" id="marketTabsContainer">
@@ -296,6 +305,45 @@
                 </div>
             </section>
 
+            <section id="settings" class="hidden space-y-6 max-w-lg mx-auto">
+                <h2 class="text-3xl font-semibold text-teal-800">🔧 환경 설정</h2>
+                <div class="bg-white p-8 rounded-xl shadow-lg">
+                    <form id="settingsForm" class="space-y-4">
+                        <div>
+                            <label for="userName" class="block text-sm font-medium text-stone-700">이름 변경</label>
+                            <input type="text" id="userName" name="userName" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg" placeholder="새로운 이름">
+                        </div>
+                        <button type="submit" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">이름 저장</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="ranking" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-teal-800">🏆 랭킹</h2>
+                <p class="text-stone-600">다른 친구들과 자산 및 수익률을 비교해보세요!</p>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="border-b border-stone-200 mb-4">
+                        <nav class="-mb-px flex space-x-8" aria-label="RankingTabs">
+                            <button data-rankingtype="totalAsset" class="ranking-tab-button active py-3 px-1 border-b-2 border-teal-600 text-teal-600 whitespace-nowrap text-sm font-medium">총 자산 랭킹</button>
+                            <button data-rankingtype="roi" class="ranking-tab-button py-3 px-1 border-b-2 border-transparent text-stone-500 hover:text-teal-600 hover:border-teal-600 whitespace-nowrap text-sm font-medium">수익률 랭킹</button>
+                        </nav>
+                    </div>
+                    <div id="rankingContentTotalAsset" class="ranking-content-area">
+                        <h3 class="text-xl font-semibold text-teal-700 mb-2">💰 총 자산 TOP 10</h3>
+                        <ul id="totalAssetRankingList" class="space-y-2">
+                            <li class="text-center text-stone-500 py-4">랭킹 정보를 불러오는 중입니다...</li>
+                        </ul>
+                    </div>
+                    <div id="rankingContentRoi" class="ranking-content-area hidden">
+                        <h3 class="text-xl font-semibold text-teal-700 mb-2">📈 수익률 TOP 10</h3>
+                        <ul id="roiRankingList" class="space-y-2">
+                             <li class="text-center text-stone-500 py-4">수익률 랭킹을 불러오는 중입니다...</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+
             <section id="admin" class="hidden space-y-6">
                 <h2 class="text-3xl font-semibold text-red-700">⚙️ 관리자 페이지 (교사용)</h2>
                 <p class="text-stone-600">이 페이지는 교사만 접근할 수 있습니다. 학생 정보 및 시장을 관리합니다.</p>
@@ -308,7 +356,7 @@
                         <h3 class="text-xl font-semibold text-red-600 mb-2">시장 관리</h3>
                         <button id="randomizePricesBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg text-sm">주가 임의 변경</button>
                         <div class="mt-4">
-                            <h4 class="text-md font-semibold text-red-500 mb-1">주식/금 가격 수동 변경</h4>
+                            <h4 class="text-md font-semibold text-red-500 mb-1">주식 가격 수동 변경</h4>
                             <select id="adminStockSelect" class="p-2 border rounded mb-2 w-full"></select>
                             <input type="number" id="adminNewPrice" placeholder="새 가격" class="p-2 border rounded w-full mb-2">
                             <button id="adminUpdatePriceBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg text-sm w-full">가격 업데이트</button>
@@ -323,6 +371,39 @@
                     </div>
                 </div>
             </section>
+            
+            <section id="adminUserDetail" class="hidden space-y-6">
+                <button id="backToAdminListBtn" class="mb-4 bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg text-sm">← 학생 목록으로</button>
+                <h2 id="adminUserDetailName" class="text-3xl font-semibold text-blue-700">학생 상세 정보</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-blue-600 mb-2">보유 주식</h3>
+                        <ul id="adminUserPortfolioList" class="space-y-1 text-sm"></ul>
+                    </div>
+                    <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-blue-600 mb-2">거래 내역</h3>
+                        <div class="overflow-x-auto max-h-96">
+                            <table class="min-w-full divide-y divide-stone-200 text-sm">
+                                <thead class="bg-stone-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">날짜</th>
+                                        <th class="px-3 py-2 text-left">종류</th>
+                                        <th class="px-3 py-2 text-left">내용</th>
+                                        <th class="px-3 py-2 text-right">금액/수량</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminUserTransactionList" class="bg-white divide-y divide-stone-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-blue-600 mb-2">선행 기록</h3>
+                        <ul id="adminUserDeedList" class="space-y-2 text-sm max-h-60 overflow-y-auto"></ul>
+                    </div>
+                </div>
+            </section>
+
+
         </main>
     </div>
 
@@ -368,6 +449,35 @@
             </div>
         </div>
     </div>
+    
+    <div id="adminEditNameModal" class="admin-modal">
+        <div class="admin-modal-content">
+            <span id="closeAdminEditNameModalBtn" class="close-button">&times;</span>
+            <h3 id="adminEditNameModalTitle" class="text-xl font-semibold text-red-600 mb-3">학생 이름 변경</h3>
+            <p id="adminEditNameStudentInfo" class="text-sm text-stone-600 mb-3"></p>
+            <div>
+                <label for="adminNewStudentName" class="block text-sm font-medium text-stone-700">새 이름</label>
+                <input type="text" id="adminNewStudentName" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500">
+            </div>
+            <div class="mt-4 text-right space-x-2">
+                <button id="cancelAdminEditNameBtn" class="bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg">취소</button>
+                <button id="adminConfirmEditNameBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">이름 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="adminResetStockModal" class="admin-modal">
+        <div class="admin-modal-content">
+            <span id="closeAdminResetStockModalBtn" class="close-button">&times;</span>
+            <h3 id="adminResetStockModalTitle" class="text-xl font-semibold text-red-600 mb-3">보유 주식 초기화</h3>
+            <p id="adminResetStockInfo" class="text-sm text-stone-600 mb-3"></p>
+            <p class="text-sm text-red-500 mb-3">이 작업은 되돌릴 수 없습니다. 정말로 해당 주식의 보유량, 평단가 등을 초기화하시겠습니까?</p>
+            <div class="mt-4 text-right space-x-2">
+                <button id="cancelAdminResetStockBtn" class="bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg">취소</button>
+                <button id="adminConfirmResetStockBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">초기화</button>
+            </div>
+        </div>
+    </div>
 
 
 <script type="module">
@@ -399,7 +509,8 @@
         Timestamp,
         arrayUnion,
         orderBy,
-        limit
+        limit,
+        deleteField
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -425,7 +536,6 @@
     let unsubscribeDeedsListener = null;
     let unsubscribeStockListeners = {};
     let stockUpdateInterval = null;
-    let goldUpdateInterval = null;
     const MAX_HISTORY_LENGTH = 200; 
 
 
@@ -476,6 +586,24 @@
     const cancelAdminAdjustBalanceBtn = document.getElementById('cancelAdminAdjustBalanceBtn');
     let studentIdToAdjust = null;
 
+    const adminEditNameModal = document.getElementById('adminEditNameModal');
+    const adminEditNameModalTitle = document.getElementById('adminEditNameModalTitle');
+    const adminEditNameStudentInfo = document.getElementById('adminEditNameStudentInfo');
+    const adminNewStudentNameInput = document.getElementById('adminNewStudentName');
+    const adminConfirmEditNameBtn = document.getElementById('adminConfirmEditNameBtn');
+    const closeAdminEditNameModalBtn = document.getElementById('closeAdminEditNameModalBtn');
+    const cancelAdminEditNameBtn = document.getElementById('cancelAdminEditNameBtn');
+    let studentIdToEditName = null;
+
+    const adminResetStockModal = document.getElementById('adminResetStockModal');
+    const adminResetStockModalTitle = document.getElementById('adminResetStockModalTitle');
+    const adminResetStockInfo = document.getElementById('adminResetStockInfo');
+    const adminConfirmResetStockBtn = document.getElementById('adminConfirmResetStockBtn');
+    const closeAdminResetStockModalBtn = document.getElementById('closeAdminResetStockModalBtn');
+    const cancelAdminResetStockBtn = document.getElementById('cancelAdminResetStockBtn');
+    let studentIdToResetStock = null;
+    let stockIdToReset = null;
+
 
     function showInfoModal(title, message) {
         console.log("Showing info modal:", title);
@@ -524,12 +652,44 @@
         studentIdToAdjust = null;
     }
 
+    function showAdminEditNameModal(studentId, currentName) {
+        studentIdToEditName = studentId;
+        adminEditNameModalTitle.textContent = `학생 이름 변경 (${currentName})`;
+        adminEditNameStudentInfo.textContent = `현재 이름: ${currentName}`;
+        adminNewStudentNameInput.value = currentName;
+        adminEditNameModal.style.display = 'block';
+    }
+
+    function closeAdminEditNameModal() {
+        adminEditNameModal.style.display = 'none';
+        studentIdToEditName = null;
+    }
+    
+    function showAdminResetStockModal(studentId, studentName, stockName, currentStockId) {
+        studentIdToResetStock = studentId;
+        stockIdToReset = currentStockId;
+        adminResetStockModalTitle.textContent = `${studentName} 학생의 ${stockName} 보유량 초기화`;
+        adminResetStockInfo.textContent = `${studentName} 학생의 ${stockName} 주식 보유 정보를 초기화합니다.`;
+        adminResetStockModal.style.display = 'block';
+    }
+
+    function closeAdminResetStockModal() {
+        adminResetStockModal.style.display = 'none';
+        studentIdToResetStock = null;
+        stockIdToReset = null;
+    }
+
+
     closeInfoModalBtn.addEventListener('click', closeInfoModal);
     confirmInfoModalBtn.addEventListener('click', closeInfoModal);
     closeAiModalBtn.addEventListener('click', closeAiModal);
     confirmAiModalBtn.addEventListener('click', closeAiModal);
     closeAdminAdjustBalanceModalBtn.addEventListener('click', closeAdminAdjustBalanceModal);
     cancelAdminAdjustBalanceBtn.addEventListener('click', closeAdminAdjustBalanceModal);
+    closeAdminEditNameModalBtn.addEventListener('click', closeAdminEditNameModal);
+    cancelAdminEditNameBtn.addEventListener('click', closeAdminEditNameModal);
+    closeAdminResetStockModalBtn.addEventListener('click', closeAdminResetStockModal);
+    cancelAdminResetStockBtn.addEventListener('click', closeAdminResetStockModal);
 
 
     window.onclick = function(event) {
@@ -541,6 +701,12 @@
         }
         if (event.target == adminAdjustBalanceModal) {
             closeAdminAdjustBalanceModal();
+        }
+        if (event.target == adminEditNameModal) {
+            closeAdminEditNameModal();
+        }
+        if (event.target == adminResetStockModal) {
+            closeAdminResetStockModal();
         }
     }
 
@@ -570,6 +736,19 @@
     const registerAuthErrorEl = document.getElementById('registerAuthError');
     const adminStudentListEl = document.getElementById('adminStudentList');
     const adminStockFluctuationSettingsEl = document.getElementById('adminStockFluctuationSettings');
+    const settingsForm = document.getElementById('settingsForm');
+    const userNameInput = document.getElementById('userName');
+    const rankingContentTotalAsset = document.getElementById('rankingContentTotalAsset');
+    const rankingContentRoi = document.getElementById('rankingContentRoi');
+    const totalAssetRankingListEl = document.getElementById('totalAssetRankingList');
+    const roiRankingListEl = document.getElementById('roiRankingList');
+    const rankingTabButtons = document.querySelectorAll('.ranking-tab-button');
+    const adminUserDetailSection = document.getElementById('adminUserDetail');
+    const adminUserDetailNameEl = document.getElementById('adminUserDetailName');
+    const adminUserPortfolioListEl = document.getElementById('adminUserPortfolioList');
+    const adminUserTransactionListEl = document.getElementById('adminUserTransactionList');
+    const adminUserDeedListEl = document.getElementById('adminUserDeedList');
+    const backToAdminListBtn = document.getElementById('backToAdminListBtn');
 
 
     // --- Navigation ---
@@ -585,6 +764,11 @@
             showInfoModal("접근 불가", "관리자만 접근할 수 있는 페이지입니다.");
             console.log("Admin access denied, redirecting to dashboard.");
             showSection('dashboard'); 
+            return;
+        }
+         if (sectionId === 'adminUserDetail' && (!currentUserData || currentUserData.role !== 'teacher')) {
+            showInfoModal("접근 불가", "관리자만 접근할 수 있는 페이지입니다.");
+            showSection('admin'); 
             return;
         }
 
@@ -619,12 +803,15 @@
             if (sectionId === 'market') loadAndRenderMarketTabs();
             if (sectionId === 'transactions') renderTransactions();
             if (sectionId === 'deeds') renderDeeds();
+            if (sectionId === 'settings') loadUserSettings();
+            if (sectionId === 'ranking') loadRankingData('totalAsset');
             if (sectionId === 'admin' && currentUserData && currentUserData.role === 'teacher') loadAdminData();
         }
     }
     
     document.getElementById('switchToRegister').addEventListener('click', (e) => { e.preventDefault(); showSection('register', true); });
     document.getElementById('switchToLogin').addEventListener('click', (e) => { e.preventDefault(); showSection('login', true); });
+    backToAdminListBtn.addEventListener('click', () => showSection('admin'));
 
 
     navLinks.forEach(link => {
@@ -715,7 +902,7 @@
                     id: userId, 
                     name: currentAuthUser.displayName || "새 사용자", 
                     email: currentAuthUser.email, 
-                    balance: 2000, // 신규 가입자 초기 잔액 변경
+                    balance: 2000, 
                     portfolio: {}, 
                     transactions: [], 
                     deeds: [],
@@ -815,6 +1002,7 @@
             let updated = false;
             querySnapshot.forEach((doc) => {
                 const stockId = doc.id;
+                if (stockId === 'gold') return; // 금 관련 데이터는 더 이상 처리하지 않음
                 const newStockData = { id: doc.id, ...doc.data() };
                 if (JSON.stringify(stockDataCache[stockId]) !== JSON.stringify(newStockData)) {
                     updated = true;
@@ -918,7 +1106,7 @@
                 uid: user.uid,
                 name: name,
                 email: user.email,
-                balance: 2000, // 신규 가입자 초기 잔액 2000원으로 변경
+                balance: 2000, 
                 portfolio: {}, 
                 role: 'student', 
                 createdAt: serverTimestamp()
@@ -952,7 +1140,8 @@
         let stockValue = 0;
         if (currentUserData.portfolio) {
             for (const stockId in currentUserData.portfolio) {
-                const quantity = currentUserData.portfolio[stockId] || 0;
+                const portfolioItem = currentUserData.portfolio[stockId];
+                const quantity = portfolioItem?.quantity || 0; 
                 const stockPrice = stockDataCache[stockId]?.price || 0;
                 stockValue += quantity * stockPrice;
             }
@@ -970,7 +1159,8 @@
 
         if (currentUserData.portfolio) {
             for (const stockId in currentUserData.portfolio) {
-                const quantity = currentUserData.portfolio[stockId];
+                const portfolioItem = currentUserData.portfolio[stockId];
+                const quantity = portfolioItem?.quantity || 0;
                 if (quantity > 0 && stockDataCache[stockId]) {
                     labels.push(stockDataCache[stockId].name);
                     data.push(quantity * stockDataCache[stockId].price);
@@ -1109,8 +1299,7 @@
         const initialStocks = {
             'hanul': { name: '한울반 주식', price: 1000, history: [1000], color: 'rgba(59, 130, 246, 0.7)', minFluctuation: -50, maxFluctuation: 100, type: 'normal' },
             'usan': { name: '우산 주식', price: 1000, history: [1000], color: 'rgba(16, 185, 129, 0.7)', minFluctuation: -50, maxFluctuation: 100, type: 'normal' },
-            'haetsal': { name: '햇살 주식', price: 1000, history: [1000], color: 'rgba(245, 158, 11, 0.7)', minFluctuation: -50, maxFluctuation: 100, type: 'normal' },
-            'gold': { name: '금', price: 0, history: [], color: 'rgba(234, 179, 8, 0.7)', type: 'gold' }
+            'haetsal': { name: '햇살 주식', price: 1000, history: [1000], color: 'rgba(245, 158, 11, 0.7)', minFluctuation: -50, maxFluctuation: 100, type: 'normal' }
         };
 
         for (const stockId in initialStocks) {
@@ -1119,8 +1308,30 @@
             if (!docSnap.exists()) {
                 console.log(`Initializing stock: ${stockId}`);
                 await setDoc(stockDocRef, initialStocks[stockId]);
+            } else { 
+                const existingData = docSnap.data();
+                if (initialStocks[stockId].type === 'normal' && 
+                    (existingData.minFluctuation === undefined || existingData.maxFluctuation === undefined)) {
+                    await updateDoc(stockDocRef, {
+                        minFluctuation: existingData.minFluctuation || initialStocks[stockId].minFluctuation,
+                        maxFluctuation: existingData.maxFluctuation || initialStocks[stockId].maxFluctuation,
+                        type: existingData.type || initialStocks[stockId].type
+                    });
+                    console.log(`Updated fluctuation fields for existing stock: ${stockId}`);
+                } 
             }
         }
+        const goldDocRef = doc(db, "stocks", "gold");
+        try {
+            const goldSnap = await getDoc(goldDocRef);
+            if (goldSnap.exists()) {
+                await deleteDoc(goldDocRef);
+                console.log("Removed 'gold' stock document as it's no longer used.");
+            }
+        } catch (error) {
+            console.warn("Could not remove 'gold' stock document (it might not exist or other error):", error);
+        }
+
     }
     
     async function updateNormalStockPrices() {
@@ -1148,85 +1359,20 @@
             }
         }
     }
-
-    async function fetchGoldPriceUSD() {
-        try {
-            const response = await fetch('https://data-asg.goldprice.org/dbXRates/USD');
-            if (!response.ok) throw new Error(`Gold API Error: ${response.status}`);
-            const data = await response.json();
-            if (data && data.items && data.items.length > 0 && data.items[0].xauPrice) {
-                 return data.items[0].xauPrice;
-            }
-            console.error("Gold API response structure unexpected:", data);
-            return null; 
-        } catch (error) {
-            console.error("Error fetching gold price (USD):", error);
-            return null;
-        }
-    }
-
-    async function fetchUSDKRWExchangeRate() {
-        try {
-            const response = await fetch('https://open.er-api.com/v6/latest/USD');
-            if (!response.ok) throw new Error(`Exchange Rate API Error: ${response.status}`);
-            const data = await response.json();
-            if (data && data.rates && data.rates.KRW) {
-                return data.rates.KRW;
-            }
-            console.error("Exchange Rate API response structure unexpected:", data);
-            return null;
-        } catch (error) {
-            console.error("Error fetching USD/KRW exchange rate:", error);
-            return null;
-        }
-    }
-
-    async function updateGoldPriceKRW() {
-        console.log("Updating gold price...");
-        const goldPriceUSD_perOunce = await fetchGoldPriceUSD();
-        const usdToKrwRate = await fetchUSDKRWExchangeRate();
-
-        if (goldPriceUSD_perOunce !== null && usdToKrwRate !== null) {
-            const ouncesToGrams = 28.3495;
-            const goldPriceKRW_perGram = (goldPriceUSD_perOunce * usdToKrwRate) / ouncesToGrams;
-            
-            const goldStock = stockDataCache['gold'];
-            const newHistory = [...(goldStock?.history || [])];
-            newHistory.push(Math.round(goldPriceKRW_perGram));
-            if (newHistory.length > MAX_HISTORY_LENGTH) newHistory.shift();
-
-            const goldDocRef = doc(db, "stocks", "gold");
-            try {
-                await updateDoc(goldDocRef, { price: Math.round(goldPriceKRW_perGram), history: newHistory });
-                console.log(`Updated Gold price (KRW/g) to ${Math.round(goldPriceKRW_perGram)}`);
-            } catch (error) {
-                console.error("Error updating gold price in Firestore:", error);
-            }
-        } else {
-            console.log("Failed to update gold price due to API fetch errors.");
-        }
-    }
     
     function startStockUpdates() {
         console.log("Starting stock updates...");
         initializeStockData().then(() => { 
             if (stockUpdateInterval) clearInterval(stockUpdateInterval);
-            if (goldUpdateInterval) clearInterval(goldUpdateInterval);
-
             updateNormalStockPrices(); 
-            updateGoldPriceKRW();    
-
             stockUpdateInterval = setInterval(updateNormalStockPrices, 60000); 
-            goldUpdateInterval = setInterval(updateGoldPriceKRW, 60000); 
         });
     }
 
     function stopStockUpdates() {
         console.log("Stopping stock updates.");
         if (stockUpdateInterval) clearInterval(stockUpdateInterval);
-        if (goldUpdateInterval) clearInterval(goldUpdateInterval);
         stockUpdateInterval = null;
-        goldUpdateInterval = null;
     }
 
 
@@ -1234,12 +1380,14 @@
         if (!currentAuthUser) return;
         marketTabsContainer.innerHTML = '<p class="text-sm text-stone-500">주식 정보 로딩 중...</p>';
         
-        if (Object.keys(stockDataCache).length === 0) {
+        if (Object.keys(stockDataCache).filter(id => id !== 'gold').length === 0) { // 금 제외하고 캐시 확인
              try {
                 const stocksQuery = query(collection(db, "stocks"));
                 const querySnapshot = await getDocs(stocksQuery);
                 querySnapshot.forEach((docSnap) => {
-                    stockDataCache[docSnap.id] = { id: docSnap.id, ...docSnap.data() };
+                    if (docSnap.id !== 'gold') { 
+                        stockDataCache[docSnap.id] = { id: docSnap.id, ...docSnap.data() };
+                    }
                 });
             } catch (error) {
                 console.error("Error fetching stocks manually:", error);
@@ -1249,7 +1397,7 @@
         }
 
         marketTabsContainer.innerHTML = ''; 
-        const stockIds = Object.keys(stockDataCache);
+        const stockIds = Object.keys(stockDataCache).filter(id => id !== 'gold'); 
 
         if (stockIds.length === 0) {
             marketTabsContainer.innerHTML = '<p class="text-sm text-stone-500">거래 가능한 주식이 없습니다.</p>';
@@ -1283,8 +1431,16 @@
             return;
         }
         const stock = stockDataCache[stockId];
-        const userHoldings = currentUserData.portfolio?.[stockId] || 0;
+        const portfolioItem = currentUserData.portfolio?.[stockId];
+        const userHoldings = portfolioItem?.quantity || 0;
+        const avgBuyPrice = portfolioItem?.avgBuyPrice || 0;
         const holdingValue = userHoldings * stock.price;
+        let roiDisplay = 'N/A';
+        if (userHoldings > 0 && avgBuyPrice > 0) {
+            const roi = ((stock.price - avgBuyPrice) / avgBuyPrice) * 100;
+            roiDisplay = `${roi.toFixed(2)}%`;
+        }
+
 
         marketContentContainer.innerHTML = `
             <div class="bg-white p-6 rounded-xl shadow-lg">
@@ -1296,6 +1452,8 @@
                     <div class="text-right mt-2 md:mt-0">
                         <p class="text-sm text-stone-500">나의 보유량: <span class="font-semibold">${userHoldings} 주</span></p>
                         <p class="text-sm text-stone-500">평가액: <span class="font-semibold">${formatCurrency(holdingValue)}</span></p>
+                        <p class="text-sm text-stone-500">평균 매수가: <span class="font-semibold">${userHoldings > 0 ? formatCurrency(avgBuyPrice) : 'N/A'}</span></p>
+                        <p class="text-sm text-stone-500">평가 수익률: <span class="font-semibold ${roiDisplay !== 'N/A' && parseFloat(roiDisplay) >= 0 ? 'text-green-600' : 'text-red-600'}">${roiDisplay}</span></p>
                          <button id="aiStockAnalysisBtn-${stockId}" data-stock-id="${stockId}" class="mt-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-3 rounded-lg text-sm transition-transform hover:scale-105">✨ AI 종목 분석</button>
                     </div>
                 </div>
@@ -1432,42 +1590,58 @@
         if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; }
 
         const stockId = e.target.stockId.value;
-        const quantity = parseInt(e.target.quantity.value);
+        const quantityToBuy = parseInt(e.target.quantity.value);
         const stock = stockDataCache[stockId];
-        if (!stock) { showInfoModal('오류', '주식 정보를 찾을 수 없습니다.'); return; }
-        const cost = quantity * stock.price;
+        if (!stock || typeof stock.price !== 'number') { 
+            showInfoModal('오류', '주식 가격 정보를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.');
+            console.error("Invalid stock data or price for stockId:", stockId, stock);
+            return; 
+        }
+        const cost = quantityToBuy * stock.price;
 
-        if (isNaN(quantity) || quantity <= 0) { showInfoModal('오류', '올바른 수량을 입력해주세요.'); return; }
+        if (isNaN(quantityToBuy) || quantityToBuy <= 0) { showInfoModal('오류', '올바른 수량을 입력해주세요.'); return; }
         if (cost > currentUserData.balance) { showInfoModal('오류', '잔액이 부족합니다.'); return; }
 
         try {
             const userDocRef = doc(db, "users", currentAuthUser.uid);
             await runTransaction(db, async (transaction) => {
                 const userSnap = await transaction.get(userDocRef);
-                if (!userSnap.exists() || userSnap.data().balance < cost) {
+                if (!userSnap.exists()) {
+                    throw new Error("사용자 정보를 찾을 수 없습니다.");
+                }
+                const userData = userSnap.data();
+                if (userData.balance < cost) {
                     throw new Error("잔액이 부족합니다. (트랜잭션 확인)");
                 }
 
-                const newPortfolio = { ...userSnap.data().portfolio };
-                newPortfolio[stockId] = (newPortfolio[stockId] || 0) + quantity;
+                const currentPortfolio = userData.portfolio || {};
+                const currentStockInfo = currentPortfolio[stockId] || { quantity: 0, avgBuyPrice: 0, totalInvested: 0, totalShares: 0 };
+                
+                const newTotalShares = (currentStockInfo.totalShares || 0) + quantityToBuy;
+                const newTotalInvested = (currentStockInfo.totalInvested || 0) + cost;
+                const newAvgBuyPrice = newTotalShares > 0 ? parseFloat((newTotalInvested / newTotalShares).toFixed(2)) : 0; 
 
-                transaction.update(userDocRef, {
-                    balance: increment(-cost),
-                    portfolio: newPortfolio
-                });
+                const updates = {};
+                updates.balance = increment(-cost);
+                updates[`portfolio.${stockId}.quantity`] = (currentStockInfo.quantity || 0) + quantityToBuy;
+                updates[`portfolio.${stockId}.avgBuyPrice`] = newAvgBuyPrice;
+                updates[`portfolio.${stockId}.totalInvested`] = newTotalInvested;
+                updates[`portfolio.${stockId}.totalShares`] = newTotalShares;
+                
+                transaction.update(userDocRef, updates);
 
                 const txColRef = collection(db, "users", currentAuthUser.uid, "transactions");
                 transaction.set(doc(txColRef), {
                     type: 'buy',
-                    description: `${stock.name} ${quantity}주 매수`,
+                    description: `${stock.name} ${quantityToBuy}주 매수`,
                     amount: cost,
                     stockId: stockId,
-                    quantity: quantity,
+                    quantity: quantityToBuy,
                     pricePerStock: stock.price,
                     date: serverTimestamp()
                 });
             });
-            showInfoModal('매수 성공', `${stock.name} ${quantity}주를 ${formatCurrency(cost)}에 매수했습니다.`);
+            showInfoModal('매수 성공', `${stock.name} ${quantityToBuy}주를 ${formatCurrency(cost)}에 매수했습니다.`);
             e.target.reset();
             document.getElementById(`buyEstimate-${stockId}`).textContent = '0 원';
         } catch (error) {
@@ -1481,15 +1655,23 @@
         if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; }
 
         const stockId = e.target.stockId.value;
-        const quantity = parseInt(e.target.quantity.value);
+        const quantityToSell = parseInt(e.target.quantity.value);
         const stock = stockDataCache[stockId];
-        if (!stock) { showInfoModal('오류', '주식 정보를 찾을 수 없습니다.'); return; }
+        if (!stock || typeof stock.price !== 'number') { 
+            showInfoModal('오류', '주식 가격 정보를 가져올 수 없습니다.');
+            return;
+        }
         
-        const currentHoldings = currentUserData.portfolio?.[stockId] || 0;
-        if (isNaN(quantity) || quantity <= 0) { showInfoModal('오류', '올바른 수량을 입력해주세요.'); return; }
-        if (quantity > currentHoldings) { showInfoModal('오류', '보유 수량이 부족합니다.'); return; }
+        const portfolioItem = currentUserData.portfolio?.[stockId];
+        const currentHoldings = portfolioItem?.quantity || 0;
+        const avgBuyPrice = portfolioItem?.avgBuyPrice || 0;
+
+
+        if (isNaN(quantityToSell) || quantityToSell <= 0) { showInfoModal('오류', '올바른 수량을 입력해주세요.'); return; }
+        if (quantityToSell > currentHoldings) { showInfoModal('오류', '보유 수량이 부족합니다.'); return; }
         
-        const income = quantity * stock.price;
+        const income = quantityToSell * stock.price;
+        const profitOrLoss = (stock.price - avgBuyPrice) * quantityToSell; 
 
         try {
             const userDocRef = doc(db, "users", currentAuthUser.uid);
@@ -1497,33 +1679,43 @@
                 const userSnap = await transaction.get(userDocRef);
                 if (!userSnap.exists()) throw new Error("사용자 정보를 찾을 수 없습니다.");
                 
-                const userPortfolio = userSnap.data().portfolio || {};
-                if ((userPortfolio[stockId] || 0) < quantity) {
+                const currentPortfolio = userSnap.data().portfolio || {};
+                const currentStockInfo = currentPortfolio[stockId];
+
+                if (!currentStockInfo || currentStockInfo.quantity < quantityToSell) {
                     throw new Error("보유 수량이 부족합니다. (트랜잭션 확인)");
                 }
+                
+                const newQuantity = currentStockInfo.quantity - quantityToSell;
+                
+                const updates = {};
+                updates.balance = increment(income);
+                updates[`portfolio.${stockId}.quantity`] = newQuantity;
+                
+                if (newQuantity === 0) {
+                    // 전부 매도 시, avgBuyPrice, totalInvested, totalShares는 유지하거나, 필요시 초기화.
+                    // 여기서는 유지하여 다음 매수 시 이전 기록을 바탕으로 평단가 계산.
+                    // 만약 완전히 초기화하고 싶다면 아래 주석 해제 또는 deleteField() 사용.
+                    // updates[`portfolio.${stockId}.avgBuyPrice`] = 0;
+                    // updates[`portfolio.${stockId}.totalInvested`] = 0;
+                    // updates[`portfolio.${stockId}.totalShares`] = 0;
+                }
 
-                const newPortfolio = { ...userPortfolio };
-                newPortfolio[stockId] -= quantity;
-                if (newPortfolio[stockId] === 0) delete newPortfolio[stockId];
-
-
-                transaction.update(userDocRef, {
-                    balance: increment(income),
-                    portfolio: newPortfolio
-                });
+                transaction.update(userDocRef, updates);
 
                 const txColRef = collection(db, "users", currentAuthUser.uid, "transactions");
                 transaction.set(doc(txColRef), {
                     type: 'sell',
-                    description: `${stock.name} ${quantity}주 매도`,
+                    description: `${stock.name} ${quantityToSell}주 매도 (손익: ${formatCurrency(profitOrLoss)})`,
                     amount: income,
                     stockId: stockId,
-                    quantity: quantity,
+                    quantity: quantityToSell,
                     pricePerStock: stock.price,
+                    profitOrLoss: profitOrLoss, 
                     date: serverTimestamp()
                 });
             });
-            showInfoModal('매도 성공', `${stock.name} ${quantity}주를 ${formatCurrency(income)}에 매도했습니다.`);
+            showInfoModal('매도 성공', `${stock.name} ${quantityToSell}주를 ${formatCurrency(income)}에 매도했습니다. (손익: ${formatCurrency(profitOrLoss)})`);
             e.target.reset();
             document.getElementById(`sellEstimate-${stockId}`).textContent = '0 원';
         } catch (error) {
@@ -1672,6 +1864,9 @@
                     break;
                 case 'sell':
                     amountDisplay = `<span class="text-sky-600">+${formatCurrency(tx.amount)} (${tx.quantity}주)</span>`;
+                    if (tx.profitOrLoss !== undefined) {
+                        amountDisplay += ` (손익: ${formatCurrency(tx.profitOrLoss)})`;
+                    }
                     break;
                 case 'deed':
                     amountDisplay = `<span class="text-amber-600 font-semibold">+${formatCurrency(tx.amount)}</span>`;
@@ -1712,6 +1907,40 @@
 
     transactionFilterEl.addEventListener('change', renderTransactions);
 
+    // --- Settings Logic ---
+    function loadUserSettings() {
+        if (currentUserData) {
+            userNameInput.value = currentUserData.name || '';
+        }
+    }
+
+    settingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentAuthUser) {
+            showInfoModal("오류", "로그인이 필요합니다.");
+            return;
+        }
+        const newName = userNameInput.value.trim();
+        if (!newName) {
+            showInfoModal("오류", "이름을 입력해주세요.");
+            return;
+        }
+
+        try {
+            await updateProfile(currentAuthUser, { displayName: newName });
+            
+            const userDocRef = doc(db, "users", currentAuthUser.uid);
+            await updateDoc(userDocRef, { name: newName });
+
+            showInfoModal("성공", "이름이 성공적으로 변경되었습니다.");
+            loggedInUserDisplay.textContent = newName; 
+        } catch (error) {
+            console.error("Error updating user name:", error);
+            showInfoModal("오류", `이름 변경 중 오류 발생: ${error.message}`);
+        }
+    });
+
+
     // --- Admin Logic ---
     async function loadAdminData() {
         if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') {
@@ -1729,8 +1958,15 @@
                 const li = document.createElement('li');
                 li.className = "flex justify-between items-center py-1";
                 li.innerHTML = `
-                    <span>${student.name} (${student.email}) - UID: ${studentId.substring(0,8)}... - 잔액: ${formatCurrency(student.balance)}</span>
-                    <button data-studentid="${studentId}" data-studentname="${student.name}" data-currentbalance="${student.balance}" class="admin-adjust-balance-btn bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 px-2 rounded">잔액 조정</button>
+                    <div class="flex-grow">
+                        <span class="font-medium">${student.name}</span> (${student.email})<br>
+                        <span class="text-xs text-stone-500">UID: ${studentId.substring(0,8)}... - 잔액: ${formatCurrency(student.balance)}</span>
+                    </div>
+                    <div class="flex space-x-1">
+                        <button data-studentid="${studentId}" data-studentname="${student.name}" class="admin-edit-name-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2 rounded">이름변경</button>
+                        <button data-studentid="${studentId}" data-studentname="${student.name}" data-currentbalance="${student.balance}" class="admin-adjust-balance-btn bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 px-2 rounded">잔액조정</button>
+                        <button data-studentid="${studentId}" data-studentname="${student.name}" class="admin-view-details-btn bg-purple-500 hover:bg-purple-600 text-white text-xs py-1 px-2 rounded">상세보기</button>
+                    </div>
                 `;
                 adminStudentListEl.appendChild(li);
             });
@@ -1742,6 +1978,21 @@
                     showAdminAdjustBalanceModal(studentId, studentName, currentBalance);
                 });
             });
+            document.querySelectorAll('.admin-edit-name-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const studentId = e.target.dataset.studentid;
+                    const studentName = e.target.dataset.studentname;
+                    showAdminEditNameModal(studentId, studentName);
+                });
+            });
+             document.querySelectorAll('.admin-view-details-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const studentId = e.target.dataset.studentid;
+                    const studentName = e.target.dataset.studentname;
+                    loadAndShowAdminUserDetail(studentId, studentName);
+                });
+            });
+
 
         } catch (error) {
             console.error("Error loading students for admin:", error);
@@ -1752,7 +2003,7 @@
         adminStockSelect.innerHTML = '<option value="">-- 주식 선택 --</option>';
         adminStockFluctuationSettingsEl.innerHTML = ''; 
 
-        Object.keys(stockDataCache).sort((a,b) => (stockDataCache[a].name > stockDataCache[b].name) ? 1 : -1).forEach(stockId => {
+        Object.keys(stockDataCache).filter(id => id !== 'gold').sort((a,b) => (stockDataCache[a].name > stockDataCache[b].name) ? 1 : -1).forEach(stockId => {
             const stock = stockDataCache[stockId];
             const option = document.createElement('option');
             option.value = stockId;
@@ -1829,6 +2080,131 @@
         }
     });
 
+    adminConfirmEditNameBtn.addEventListener('click', async () => {
+        if (!studentIdToEditName) return;
+        const newName = adminNewStudentNameInput.value.trim();
+        if (!newName) {
+            showInfoModal("오류", "새로운 이름을 입력하세요.");
+            return;
+        }
+        try {
+            const studentDocRef = doc(db, "users", studentIdToEditName);
+            await updateDoc(studentDocRef, { name: newName });
+
+            const targetAuthUser = auth.currentUser; 
+            if (targetAuthUser && studentIdToEditName === targetAuthUser.uid) { 
+                 await updateProfile(targetAuthUser, { displayName: newName });
+                 loggedInUserDisplay.textContent = newName; 
+            }
+
+
+            showInfoModal("성공", "학생 이름이 성공적으로 변경되었습니다.");
+            closeAdminEditNameModal();
+            loadAdminData(); 
+        } catch (error) {
+            console.error("Error editing student name:", error);
+            showInfoModal("오류", `이름 변경 중 오류 발생: ${error.message}`);
+        }
+    });
+
+    async function loadAndShowAdminUserDetail(studentId, studentName) {
+        adminUserDetailNameEl.textContent = `${studentName} 학생 상세 정보`;
+        adminUserPortfolioListEl.innerHTML = '<li>포트폴리오 정보 로딩 중...</li>';
+        adminUserTransactionListEl.innerHTML = '<tr><td colspan="4" class="text-center py-4">거래 내역 로딩 중...</td></tr>';
+        adminUserDeedListEl.innerHTML = '<li>선행 기록 로딩 중...</li>';
+        showSection('adminUserDetail');
+
+        try {
+            const userDocRef = doc(db, "users", studentId);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+                const userData = userDocSnap.data();
+                adminUserPortfolioListEl.innerHTML = '';
+                if (userData.portfolio && Object.keys(userData.portfolio).length > 0) {
+                    for (const stockId in userData.portfolio) {
+                        const item = userData.portfolio[stockId];
+                        const stockInfo = stockDataCache[stockId];
+                        if (!stockInfo) continue; // 금(gold) 데이터가 삭제되었으므로, stockInfo가 없을 수 있음
+                        const li = document.createElement('li');
+                        li.className = "flex justify-between items-center";
+                        li.innerHTML = `
+                            <span>${stockInfo.name}: ${item.quantity}주 (평단가: ${formatCurrency(item.avgBuyPrice || 0)})</span>
+                            <button data-studentid="${studentId}" data-stockid="${stockId}" data-stockname="${stockInfo.name}" class="admin-reset-stock-btn bg-red-500 hover:bg-red-600 text-white text-xs py-0.5 px-1.5 rounded ml-2">초기화</button>
+                        `;
+                        adminUserPortfolioListEl.appendChild(li);
+                    }
+                    document.querySelectorAll('.admin-reset-stock-btn').forEach(button => {
+                        button.addEventListener('click', (e) => {
+                            const studentIdForReset = e.target.dataset.studentid;
+                            const stockIdForReset = e.target.dataset.stockid;
+                            const stockNameForReset = e.target.dataset.stockname;
+                            showAdminResetStockModal(studentIdForReset, studentName, stockNameForReset, stockIdForReset);
+                        });
+                    });
+                } else {
+                    adminUserPortfolioListEl.innerHTML = '<li>보유 주식 없음</li>';
+                }
+            } else {
+                 adminUserPortfolioListEl.innerHTML = '<li>사용자 정보 없음</li>';
+            }
+
+            const transactionsQuery = query(collection(db, "users", studentId, "transactions"), orderBy("date", "desc"));
+            const transactionsSnapshot = await getDocs(transactionsQuery);
+            adminUserTransactionListEl.innerHTML = '';
+            if (transactionsSnapshot.empty) {
+                adminUserTransactionListEl.innerHTML = '<tr><td colspan="4" class="text-center py-4">거래 내역 없음</td></tr>';
+            } else {
+                transactionsSnapshot.forEach(docSnap => {
+                    const tx = docSnap.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="px-3 py-2 whitespace-nowrap">${formatDate(tx.date)}</td>
+                        <td class="px-3 py-2">${getTransactionTypeKorean(tx.type)}</td>
+                        <td class="px-3 py-2">${tx.description}</td>
+                        <td class="px-3 py-2 text-right">${formatCurrency(tx.amount)} ${tx.quantity ? `(${tx.quantity}주)`: ''}</td>
+                    `;
+                    adminUserTransactionListEl.appendChild(tr);
+                });
+            }
+
+            const deedsQuery = query(collection(db, "users", studentId, "deeds"), orderBy("date", "desc"));
+            const deedsSnapshot = await getDocs(deedsQuery);
+            adminUserDeedListEl.innerHTML = '';
+            if (deedsSnapshot.empty) {
+                adminUserDeedListEl.innerHTML = '<li>선행 기록 없음</li>';
+            } else {
+                deedsSnapshot.forEach(docSnap => {
+                    const deed = docSnap.data();
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>${formatDate(deed.date)}:</strong> ${deed.description} (+${formatCurrency(deed.reward)})`;
+                    adminUserDeedListEl.appendChild(li);
+                });
+            }
+
+        } catch (error) {
+            console.error("Error loading admin user detail:", error);
+            showInfoModal("오류", "학생 상세 정보 로드 실패");
+        }
+    }
+    
+    adminConfirmResetStockBtn.addEventListener('click', async () => {
+        if (!studentIdToResetStock || !stockIdToReset) return;
+        try {
+            const userDocRef = doc(db, "users", studentIdToResetStock);
+            const portfolioFieldPath = `portfolio.${stockIdToReset}`;
+            await updateDoc(userDocRef, {
+                [portfolioFieldPath]: deleteField() 
+            });
+            showInfoModal("성공", "해당 주식 보유 정보가 초기화되었습니다.");
+            closeAdminResetStockModal();
+            const studentName = adminUserDetailNameEl.textContent.split(" ")[0]; 
+            loadAndShowAdminUserDetail(studentIdToResetStock, studentName);
+        } catch (error) {
+            console.error("Error resetting stock for user:", error);
+            showInfoModal("오류", "주식 정보 초기화 중 오류 발생");
+        }
+    });
+
 
     document.getElementById('randomizePricesBtn').addEventListener('click', async () => {
         if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') { 
@@ -1897,6 +2273,114 @@
             showInfoModal("오류", "주가 변경 중 오류 발생");
         }
     });
+
+    // --- Ranking Logic ---
+    rankingTabButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            rankingTabButtons.forEach(btn => btn.classList.remove('active', 'border-teal-600', 'text-teal-600'));
+            rankingTabButtons.forEach(btn => btn.classList.add('border-transparent', 'text-stone-500'));
+            e.target.classList.add('active', 'border-teal-600', 'text-teal-600');
+            e.target.classList.remove('border-transparent', 'text-stone-500');
+            
+            const rankingType = e.target.dataset.rankingtype;
+            document.querySelectorAll('.ranking-content-area').forEach(area => area.classList.add('hidden'));
+            document.getElementById(`rankingContent${rankingType.charAt(0).toUpperCase() + rankingType.slice(1)}`).classList.remove('hidden');
+            loadRankingData(rankingType);
+        });
+    });
+
+    async function loadRankingData(type) {
+        if (!currentAuthUser) return;
+        
+        if (type === 'totalAsset') {
+            totalAssetRankingListEl.innerHTML = '<li class="text-center text-stone-500 py-4">총 자산 랭킹 불러오는 중...</li>';
+            try {
+                const usersSnapshot = await getDocs(collection(db, "users"));
+                const userAssets = [];
+                usersSnapshot.forEach(docSnap => {
+                    const user = docSnap.data();
+                    let totalStockValue = 0;
+                    if (user.portfolio) {
+                        for (const stockId in user.portfolio) {
+                            const portfolioItem = user.portfolio[stockId];
+                            const stockInfo = stockDataCache[stockId];
+                            if (portfolioItem && stockInfo) {
+                                totalStockValue += (portfolioItem.quantity || 0) * (stockInfo.price || 0);
+                            }
+                        }
+                    }
+                    userAssets.push({
+                        name: user.name,
+                        totalAsset: (user.balance || 0) + totalStockValue
+                    });
+                });
+
+                userAssets.sort((a, b) => b.totalAsset - a.totalAsset);
+                totalAssetRankingListEl.innerHTML = '';
+                userAssets.slice(0, 10).forEach((user, index) => { 
+                    const li = document.createElement('li');
+                    li.className = "flex justify-between items-center p-2 border-b";
+                    li.innerHTML = `<span>${index + 1}. ${user.name}</span> <span class="font-semibold">${formatCurrency(user.totalAsset)}</span>`;
+                    totalAssetRankingListEl.appendChild(li);
+                });
+                if (userAssets.length === 0) {
+                     totalAssetRankingListEl.innerHTML = '<li class="text-center text-stone-500 py-4">랭킹 정보가 없습니다.</li>';
+                }
+
+            } catch (error) {
+                console.error("Error loading total asset ranking:", error);
+                totalAssetRankingListEl.innerHTML = '<li class="text-center text-red-500 py-4">랭킹 정보를 불러오는데 실패했습니다.</li>';
+            }
+        } else if (type === 'roi') {
+            roiRankingListEl.innerHTML = '<li class="text-center text-stone-500 py-4">수익률 랭킹 불러오는 중...</li>';
+             try {
+                const usersSnapshot = await getDocs(collection(db, "users"));
+                const userRois = [];
+                usersSnapshot.forEach(docSnap => {
+                    const user = docSnap.data();
+                    let totalPortfolioCurrentValue = 0;
+                    let totalPortfolioCostBasis = 0;
+
+                    if (user.portfolio) {
+                        for (const stockId in user.portfolio) {
+                            const portfolioItem = user.portfolio[stockId];
+                            const stockInfo = stockDataCache[stockId];
+                            if (portfolioItem && stockInfo && portfolioItem.quantity > 0 && portfolioItem.avgBuyPrice > 0) {
+                                totalPortfolioCostBasis += portfolioItem.avgBuyPrice * portfolioItem.quantity;
+                                totalPortfolioCurrentValue += stockInfo.price * portfolioItem.quantity;
+                            }
+                        }
+                    }
+                    
+                    let roi = 0;
+                    if (totalPortfolioCostBasis > 0) {
+                        roi = ((totalPortfolioCurrentValue - totalPortfolioCostBasis) / totalPortfolioCostBasis) * 100;
+                    }
+                    
+                    userRois.push({
+                        name: user.name,
+                        roi: roi 
+                    });
+                });
+
+                userRois.sort((a, b) => b.roi - a.roi); // 수익률 높은 순
+                roiRankingListEl.innerHTML = '';
+                userRois.slice(0, 10).forEach((user, index) => {
+                    const li = document.createElement('li');
+                    li.className = "flex justify-between items-center p-2 border-b";
+                    li.innerHTML = `<span>${index + 1}. ${user.name}</span> <span class="font-semibold ${user.roi >= 0 ? 'text-green-600' : 'text-red-600'}">${user.roi.toFixed(2)}%</span>`;
+                    roiRankingListEl.appendChild(li);
+                });
+                 if (userRois.length === 0) {
+                     roiRankingListEl.innerHTML = '<li class="text-center text-stone-500 py-4">랭킹 정보가 없습니다.</li>';
+                }
+
+            } catch (error) {
+                console.error("Error loading ROI ranking:", error);
+                roiRankingListEl.innerHTML = '<li class="text-center text-red-500 py-4">수익률 랭킹을 불러오는데 실패했습니다.</li>';
+            }
+        }
+    }
     
     // --- Mobile Sidebar Toggle ---
     const sidebar = document.getElementById('sidebar');
