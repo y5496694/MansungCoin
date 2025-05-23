@@ -13,6 +13,7 @@
         - Good Deeds: Submission Form (once per day check), Status List (data from Firestore). AI Deed Story Expansion (Gemini API).
         - Transactions: Table/List with filters (data from Firestore).
         - Settings: User name change.
+        - Board: Notice (Admin write, User read), Freeboard (User write/read/edit-own/delete-own). Posts stored in Firestore.
         - Admin: Student list with edit name/view details/reset stock buttons, stock fluctuation settings, stock price manual update.
         - Ranking: ROI and Total Asset ranking implemented.
         - All interactions via vanilla JS. Data stored in Firestore. NO SVG/Mermaid. -->
@@ -44,7 +45,7 @@
                 height: 350px;
             }
         }
-        .tab-button.active {
+        .tab-button.active, .board-tab-button.active {
             border-bottom-color: #0d9488; /* teal-600 */
             color: #0d9488;
             font-weight: 600;
@@ -53,7 +54,7 @@
             background-color: #0d9488; /* teal-600 */
             color: white;
         }
-        .modal, .ai-modal, .admin-modal {
+        .modal, .ai-modal, .admin-modal, .post-modal {
             display: none; 
             position: fixed; 
             z-index: 100; 
@@ -64,7 +65,7 @@
             overflow: auto; 
             background-color: rgba(0,0,0,0.4); 
         }
-        .modal-content, .ai-modal-content, .admin-modal-content {
+        .modal-content, .ai-modal-content, .admin-modal-content, .post-modal-content {
             background-color: #fefefe;
             margin: 10% auto; 
             padding: 20px;
@@ -74,6 +75,7 @@
             border-radius: 0.5rem;
             position: relative;
         }
+        .post-modal-content { max-width: 700px; } /* 게시글 모달은 조금 더 넓게 */
         .close-button {
             color: #aaa;
             position: absolute;
@@ -101,6 +103,7 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .post-content { white-space: pre-wrap; } /* 게시글 내용 줄바꿈 적용 */
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
@@ -111,9 +114,9 @@
             </svg>
         </button>
 
-        <aside id="sidebar" class="sidebar fixed inset-y-0 left-0 z-20 w-64 bg-teal-700 text-white p-6 space-y-4 shadow-lg md:translate-x-0">
+        <aside id="sidebar" class="sidebar fixed inset-y-0 left-0 z-20 w-64 bg-teal-700 text-white p-6 space-y-2 shadow-lg md:translate-x-0 overflow-y-auto">
             <h1 class="text-3xl font-bold font-display">만승 경제 교실</h1>
-            <nav class="space-y-2">
+            <nav class="space-y-1">
                 <a href="#" data-section="dashboard" class="nav-link active-nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
                     <span>🏠</span><span>내 지갑</span>
                 </a>
@@ -122,6 +125,9 @@
                 </a>
                 <a href="#" data-section="market" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
                     <span>📈</span><span>주식 시장</span>
+                </a>
+                 <a href="#" data-section="board" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
+                    <span>📢</span><span>게시판</span>
                 </a>
                 <a href="#" data-section="deeds" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors">
                     <span>🌟</span><span>나의 선행</span>
@@ -248,6 +254,30 @@
                     </div>
                     <div id="marketContent" class="space-y-6">
                         </div>
+                </div>
+            </section>
+
+             <section id="board" class="hidden space-y-6">
+                <h2 class="text-3xl font-semibold text-teal-800">📢 게시판</h2>
+                <div class="border-b border-stone-200 mb-4">
+                    <nav class="-mb-px flex space-x-8" aria-label="BoardTabs">
+                        <button data-boardtype="notice" class="board-tab-button active py-3 px-1 border-b-2 border-teal-600 text-teal-600 whitespace-nowrap text-sm font-medium">공지사항</button>
+                        <button data-boardtype="freeboard" class="board-tab-button py-3 px-1 border-b-2 border-transparent text-stone-500 hover:text-teal-600 hover:border-teal-600 whitespace-nowrap text-sm font-medium">자유게시판</button>
+                    </nav>
+                </div>
+                <div id="boardContentNotice" class="board-content-area space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-xl font-semibold text-teal-700">공지사항 목록</h3>
+                        <button id="newNoticePostBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg text-sm hidden">새 공지 작성</button>
+                    </div>
+                    <ul id="noticePostList" class="space-y-3"></ul>
+                </div>
+                <div id="boardContentFreeboard" class="board-content-area hidden space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-xl font-semibold text-teal-700">자유게시판 목록</h3>
+                        <button id="newFreePostBtn" class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-4 rounded-lg text-sm">새 글 작성</button>
+                    </div>
+                    <ul id="freePostList" class="space-y-3"></ul>
                 </div>
             </section>
 
@@ -479,6 +509,28 @@
         </div>
     </div>
 
+    <div id="postModal" class="post-modal">
+        <div class="post-modal-content">
+            <span id="closePostModalBtn" class="close-button">&times;</span>
+            <h3 id="postModalTitle" class="text-2xl font-bold text-teal-700 mb-4">글 작성/수정</h3>
+            <form id="postForm" class="space-y-4">
+                <input type="hidden" id="postBoardType">
+                <input type="hidden" id="postEditId">
+                <div>
+                    <label for="postTitleInput" class="block text-sm font-medium text-stone-700">제목</label>
+                    <input type="text" id="postTitleInput" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg">
+                </div>
+                <div>
+                    <label for="postContentInput" class="block text-sm font-medium text-stone-700">내용</label>
+                    <textarea id="postContentInput" rows="8" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg"></textarea>
+                </div>
+                <div class="text-right">
+                    <button type="submit" id="savePostBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -535,6 +587,8 @@
     let unsubscribeTransactionsListener = null;
     let unsubscribeDeedsListener = null;
     let unsubscribeStockListeners = {};
+    let unsubscribeNoticePostsListener = null;
+    let unsubscribeFreeboardPostsListener = null;
     let stockUpdateInterval = null;
     const MAX_HISTORY_LENGTH = 200; 
 
@@ -546,6 +600,7 @@
     // --- Utility Functions ---
     const formatCurrency = (amount) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount);
     const formatDate = (date) => {
+        if (!date) return '날짜 정보 없음';
         if (date instanceof Timestamp) { 
             date = date.toDate();
         }
@@ -603,6 +658,16 @@
     const cancelAdminResetStockBtn = document.getElementById('cancelAdminResetStockBtn');
     let studentIdToResetStock = null;
     let stockIdToReset = null;
+
+    const postModal = document.getElementById('postModal');
+    const postModalTitleEl = document.getElementById('postModalTitle');
+    const postForm = document.getElementById('postForm');
+    const postBoardTypeInput = document.getElementById('postBoardType');
+    const postEditIdInput = document.getElementById('postEditId');
+    const postTitleInput = document.getElementById('postTitleInput');
+    const postContentInput = document.getElementById('postContentInput');
+    const savePostBtn = document.getElementById('savePostBtn');
+    const closePostModalBtn = document.getElementById('closePostModalBtn');
 
 
     function showInfoModal(title, message) {
@@ -679,6 +744,27 @@
         stockIdToReset = null;
     }
 
+    function showPostModal(boardType, post = null) {
+        postBoardTypeInput.value = boardType;
+        if (post) { // 수정 모드
+            postModalTitleEl.textContent = `${boardType === 'notice' ? '공지사항' : '자유게시글'} 수정`;
+            postEditIdInput.value = post.id;
+            postTitleInput.value = post.title;
+            postContentInput.value = post.content;
+        } else { // 새 글 작성 모드
+            postModalTitleEl.textContent = `새 ${boardType === 'notice' ? '공지사항' : '자유게시글'} 작성`;
+            postEditIdInput.value = '';
+            postForm.reset(); // 폼 초기화
+        }
+        postModal.style.display = 'block';
+    }
+
+    function closePostModal() {
+        postModal.style.display = 'none';
+        postForm.reset();
+        postEditIdInput.value = '';
+    }
+
 
     closeInfoModalBtn.addEventListener('click', closeInfoModal);
     confirmInfoModalBtn.addEventListener('click', closeInfoModal);
@@ -690,6 +776,7 @@
     cancelAdminEditNameBtn.addEventListener('click', closeAdminEditNameModal);
     closeAdminResetStockModalBtn.addEventListener('click', closeAdminResetStockModal);
     cancelAdminResetStockBtn.addEventListener('click', closeAdminResetStockModal);
+    closePostModalBtn.addEventListener('click', closePostModal);
 
 
     window.onclick = function(event) {
@@ -707,6 +794,9 @@
         }
         if (event.target == adminResetStockModal) {
             closeAdminResetStockModal();
+        }
+        if (event.target == postModal) {
+            closePostModal();
         }
     }
 
@@ -749,6 +839,13 @@
     const adminUserTransactionListEl = document.getElementById('adminUserTransactionList');
     const adminUserDeedListEl = document.getElementById('adminUserDeedList');
     const backToAdminListBtn = document.getElementById('backToAdminListBtn');
+    const boardTabButtons = document.querySelectorAll('.board-tab-button');
+    const boardContentNoticeEl = document.getElementById('boardContentNotice');
+    const boardContentFreeboardEl = document.getElementById('boardContentFreeboard');
+    const noticePostListEl = document.getElementById('noticePostList');
+    const freePostListEl = document.getElementById('freePostList');
+    const newNoticePostBtn = document.getElementById('newNoticePostBtn');
+    const newFreePostBtn = document.getElementById('newFreePostBtn');
 
 
     // --- Navigation ---
@@ -801,6 +898,7 @@
         if (currentAuthUser) { 
             if (sectionId === 'dashboard') updateDashboardDisplay();
             if (sectionId === 'market') loadAndRenderMarketTabs();
+            if (sectionId === 'board') loadAndRenderBoard('notice'); // 기본으로 공지사항 로드
             if (sectionId === 'transactions') renderTransactions();
             if (sectionId === 'deeds') renderDeeds();
             if (sectionId === 'settings') loadUserSettings();
@@ -851,9 +949,11 @@
             if (currentUserData && currentUserData.role === 'teacher') {
                 adminNavLink.classList.remove('hidden');
                 adminDivider.classList.remove('hidden');
+                newNoticePostBtn.classList.remove('hidden'); // 관리자일 경우 공지 작성 버튼 표시
             } else {
                 adminNavLink.classList.add('hidden');
                 adminDivider.classList.add('hidden');
+                newNoticePostBtn.classList.add('hidden');
             }
             
             showSection('dashboard'); 
@@ -863,6 +963,8 @@
             loginLinkText.textContent = '로그인';
             adminNavLink.classList.add('hidden');
             adminDivider.classList.add('hidden');
+            newNoticePostBtn.classList.add('hidden');
+
 
             currentUserData = null; 
             detachRealtimeListeners(); 
@@ -948,9 +1050,11 @@
                 if (currentUserData && currentUserData.role === 'teacher') {
                     adminNavLink.classList.remove('hidden');
                     adminDivider.classList.remove('hidden');
+                    newNoticePostBtn.classList.remove('hidden');
                 } else {
                     adminNavLink.classList.add('hidden');
                     adminDivider.classList.add('hidden');
+                    newNoticePostBtn.classList.add('hidden');
                 }
             }
         }, (error) => {
@@ -1022,6 +1126,21 @@
         }, (error) => {
             console.error("Error in stocks onSnapshot:", error);
         });
+
+        // 게시판 리스너 추가
+        const noticeQuery = query(collection(db, "boards", "notice", "posts"), orderBy("createdAt", "desc"));
+        unsubscribeNoticePostsListener = onSnapshot(noticeQuery, (snapshot) => {
+            if (document.getElementById('board').classList.contains('hidden') === false && document.getElementById('boardContentNotice').classList.contains('hidden') === false) {
+                renderPosts('notice', snapshot);
+            }
+        });
+
+        const freeboardQuery = query(collection(db, "boards", "freeboard", "posts"), orderBy("createdAt", "desc"));
+        unsubscribeFreeboardPostsListener = onSnapshot(freeboardQuery, (snapshot) => {
+             if (document.getElementById('board').classList.contains('hidden') === false && document.getElementById('boardContentFreeboard').classList.contains('hidden') === false) {
+                renderPosts('freeboard', snapshot);
+            }
+        });
     }
 
     function detachRealtimeListeners() {
@@ -1030,6 +1149,8 @@
         if (unsubscribeDeedsListener) unsubscribeDeedsListener();
         Object.values(unsubscribeStockListeners).forEach(unsub => unsub());
         unsubscribeStockListeners = {};
+        if (unsubscribeNoticePostsListener) unsubscribeNoticePostsListener();
+        if (unsubscribeFreeboardPostsListener) unsubscribeFreeboardPostsListener();
     }
 
     // --- Gemini API Call Function ---
@@ -1630,7 +1751,7 @@
                 
                 const updates = {};
                 updates.balance = increment(-cost);
-                updates[`portfolio.${stockId}`] = updatedStockData; // 점 표기법으로 특정 주식 객체 전체 업데이트
+                updates[`portfolio.${stockId}`] = updatedStockData; 
                 
                 transaction.update(userDocRef, updates);
 
@@ -1695,10 +1816,10 @@
                 updates.balance = increment(income);
 
                 if (newQuantity === 0) {
-                    // 전부 매도 시, 해당 주식 필드를 portfolio 맵에서 제거
                     updates[`portfolio.${stockId}`] = deleteField();
                 } else {
-                    // 부분 매도 시, quantity만 업데이트. avgBuyPrice, totalInvested, totalShares는 유지.
+                    // 매도 시에는 avgBuyPrice, totalInvested, totalShares를 변경하지 않고 quantity만 업데이트합니다.
+                    // 이 필드들은 매수 시에만 누적/재계산됩니다.
                     updates[`portfolio.${stockId}.quantity`] = newQuantity;
                 }
                 
@@ -2346,7 +2467,6 @@
                         for (const stockId in user.portfolio) {
                             const portfolioItem = user.portfolio[stockId];
                             const stockInfo = stockDataCache[stockId];
-                            // 수익률 계산은 주식을 실제로 보유하고 있고, 평단가가 있는 경우에만 의미가 있음
                             if (portfolioItem && stockInfo && portfolioItem.quantity > 0 && portfolioItem.avgBuyPrice > 0) {
                                 totalPortfolioCostBasis += portfolioItem.avgBuyPrice * portfolioItem.quantity;
                                 totalPortfolioCurrentValue += stockInfo.price * portfolioItem.quantity;
@@ -2355,7 +2475,7 @@
                     }
                     
                     let roi = 0;
-                    if (totalPortfolioCostBasis > 0) { // 총 투자 금액이 0보다 클 때만 수익률 계산
+                    if (totalPortfolioCostBasis > 0) { 
                         roi = ((totalPortfolioCurrentValue - totalPortfolioCostBasis) / totalPortfolioCostBasis) * 100;
                     }
                     
@@ -2365,7 +2485,7 @@
                     });
                 });
 
-                userRois.sort((a, b) => b.roi - a.roi); // 수익률 높은 순
+                userRois.sort((a, b) => b.roi - a.roi); 
                 roiRankingListEl.innerHTML = '';
                 userRois.slice(0, 10).forEach((user, index) => {
                     const li = document.createElement('li');
@@ -2397,6 +2517,142 @@
             sidebar.classList.remove('open');
         }
     });
+
+    // --- Board Logic ---
+    boardTabButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            boardTabButtons.forEach(btn => btn.classList.remove('active', 'border-teal-600', 'text-teal-600'));
+            boardTabButtons.forEach(btn => btn.classList.add('border-transparent', 'text-stone-500'));
+            e.target.classList.add('active', 'border-teal-600', 'text-teal-600');
+            e.target.classList.remove('border-transparent', 'text-stone-500');
+            
+            const boardType = e.target.dataset.boardtype;
+            document.querySelectorAll('.board-content-area').forEach(area => area.classList.add('hidden'));
+            document.getElementById(`boardContent${boardType.charAt(0).toUpperCase() + boardType.slice(1)}`).classList.remove('hidden');
+            loadAndRenderBoard(boardType);
+        });
+    });
+
+    newNoticePostBtn.addEventListener('click', () => showPostModal('notice'));
+    newFreePostBtn.addEventListener('click', () => showPostModal('freeboard'));
+
+    postForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentAuthUser) {
+            showInfoModal("오류", "글을 작성하려면 로그인이 필요합니다.");
+            return;
+        }
+        const boardType = postBoardTypeInput.value;
+        const postId = postEditIdInput.value;
+        const title = postTitleInput.value.trim();
+        const content = postContentInput.value.trim();
+
+        if (!title || !content) {
+            showInfoModal("오류", "제목과 내용을 모두 입력해주세요.");
+            return;
+        }
+
+        const postData = {
+            title: title,
+            content: content,
+            authorUid: currentAuthUser.uid,
+            authorName: currentUserData.name || currentAuthUser.email, // 현재 사용자 이름 사용
+            updatedAt: serverTimestamp()
+        };
+
+        try {
+            if (postId) { // 글 수정
+                const postRef = doc(db, "boards", boardType, "posts", postId);
+                await updateDoc(postRef, postData);
+                showInfoModal("성공", "글이 수정되었습니다.");
+            } else { // 새 글 작성
+                postData.createdAt = serverTimestamp();
+                await addDoc(collection(db, "boards", boardType, "posts"), postData);
+                showInfoModal("성공", "글이 작성되었습니다.");
+            }
+            closePostModal();
+            // loadAndRenderBoard(boardType); // onSnapshot이 처리
+        } catch (error) {
+            console.error(`Error saving post to ${boardType}:`, error);
+            showInfoModal("오류", "글을 저장하는 중 오류가 발생했습니다.");
+        }
+    });
+
+    async function loadAndRenderBoard(boardType) {
+        const listEl = boardType === 'notice' ? noticePostListEl : freePostListEl;
+        listEl.innerHTML = `<li class="text-center text-stone-500 py-4">${boardType === 'notice' ? '공지사항' : '게시글'}을 불러오는 중...</li>`;
+        
+        // onSnapshot 리스너가 이미 데이터를 가져오고 renderPosts를 호출하므로,
+        // 여기서는 UI만 초기화하고, 필요시 onSnapshot에서 renderPosts를 직접 호출하도록 유도.
+        // 만약 onSnapshot이 아직 데이터를 가져오지 않았다면, 이 메시지가 잠시 보일 수 있음.
+        // 실시간 업데이트를 위해 onSnapshot을 사용하므로, 여기서 직접 getDocs를 호출하는 것은 중복될 수 있음.
+        // 대신, onSnapshot 콜백에서 해당 게시판이 활성화되어 있을 때만 renderPosts를 호출하도록 함.
+        const querySnapshot = await getDocs(query(collection(db, "boards", boardType, "posts"), orderBy("createdAt", "desc")));
+        renderPosts(boardType, querySnapshot);
+    }
+
+    function renderPosts(boardType, snapshot) {
+        const listEl = boardType === 'notice' ? noticePostListEl : freePostListEl;
+        listEl.innerHTML = '';
+        if (snapshot.empty) {
+            listEl.innerHTML = `<li class="text-center text-stone-500 py-4">${boardType === 'notice' ? '공지사항이' : '게시글이'} 없습니다.</li>`;
+            return;
+        }
+        snapshot.forEach(docSnap => {
+            const post = { id: docSnap.id, ...docSnap.data() };
+            const li = document.createElement('li');
+            li.className = "bg-white p-4 rounded-lg shadow-sm border border-stone-200";
+            li.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h4 class="text-lg font-semibold text-teal-700">${post.title}</h4>
+                        <p class="text-xs text-stone-500">작성자: ${post.authorName} | 날짜: ${formatDate(post.createdAt)}</p>
+                    </div>
+                    ${ (currentUserData && (currentUserData.role === 'teacher' || post.authorUid === currentAuthUser.uid)) ? 
+                    `<div class="flex space-x-2">
+                        <button data-boardtype="${boardType}" data-postid="${post.id}" class="edit-post-btn text-xs bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-2 rounded">수정</button>
+                        <button data-boardtype="${boardType}" data-postid="${post.id}" class="delete-post-btn text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded">삭제</button>
+                    </div>` : '' }
+                </div>
+                <p class="mt-2 text-stone-700 post-content">${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}</p>
+                ${post.content.length > 100 ? `<button data-boardtype="${boardType}" data-postid="${post.id}" class="view-full-post-btn text-xs text-blue-500 hover:underline mt-1">더보기</button>` : ''}
+
+            `;
+            listEl.appendChild(li);
+        });
+
+        // 이벤트 리스너 위임 (동적으로 생성된 버튼에 대해)
+        listEl.addEventListener('click', async (e) => {
+            const target = e.target;
+            const boardType = target.dataset.boardtype;
+            const postId = target.dataset.postid;
+
+            if (target.classList.contains('edit-post-btn')) {
+                const postDoc = await getDoc(doc(db, "boards", boardType, "posts", postId));
+                if (postDoc.exists()) {
+                    showPostModal(boardType, { id: postDoc.id, ...postDoc.data() });
+                }
+            } else if (target.classList.contains('delete-post-btn')) {
+                if (confirm("정말로 이 글을 삭제하시겠습니까?")) {
+                    try {
+                        await deleteDoc(doc(db, "boards", boardType, "posts", postId));
+                        showInfoModal("성공", "글이 삭제되었습니다.");
+                        // loadAndRenderBoard(boardType); // onSnapshot이 처리
+                    } catch (error) {
+                        console.error("Error deleting post:", error);
+                        showInfoModal("오류", "글 삭제 중 오류 발생");
+                    }
+                }
+            } else if (target.classList.contains('view-full-post-btn')) {
+                const postDoc = await getDoc(doc(db, "boards", boardType, "posts", postId));
+                 if (postDoc.exists()) {
+                    const postData = postDoc.data();
+                    showInfoModal(postData.title, postData.content); // 간단히 infoModal 재활용
+                }
+            }
+        });
+    }
+
 
     // --- Initial Load ---
     function startManseungApp() { 
