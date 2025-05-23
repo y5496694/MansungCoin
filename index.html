@@ -1002,7 +1002,7 @@
             let updated = false;
             querySnapshot.forEach((doc) => {
                 const stockId = doc.id;
-                if (stockId === 'gold') return; // 금 관련 데이터는 더 이상 처리하지 않음
+                if (stockId === 'gold') return; 
                 const newStockData = { id: doc.id, ...doc.data() };
                 if (JSON.stringify(stockDataCache[stockId]) !== JSON.stringify(newStockData)) {
                     updated = true;
@@ -1380,7 +1380,7 @@
         if (!currentAuthUser) return;
         marketTabsContainer.innerHTML = '<p class="text-sm text-stone-500">주식 정보 로딩 중...</p>';
         
-        if (Object.keys(stockDataCache).filter(id => id !== 'gold').length === 0) { // 금 제외하고 캐시 확인
+        if (Object.keys(stockDataCache).filter(id => id !== 'gold').length === 0) { 
              try {
                 const stocksQuery = query(collection(db, "stocks"));
                 const querySnapshot = await getDocs(stocksQuery);
@@ -1621,12 +1621,16 @@
                 const newTotalInvested = (currentStockInfo.totalInvested || 0) + cost;
                 const newAvgBuyPrice = newTotalShares > 0 ? parseFloat((newTotalInvested / newTotalShares).toFixed(2)) : 0; 
 
+                const updatedStockData = {
+                    quantity: (currentStockInfo.quantity || 0) + quantityToBuy,
+                    avgBuyPrice: newAvgBuyPrice,
+                    totalInvested: newTotalInvested,
+                    totalShares: newTotalShares
+                };
+                
                 const updates = {};
                 updates.balance = increment(-cost);
-                updates[`portfolio.${stockId}.quantity`] = (currentStockInfo.quantity || 0) + quantityToBuy;
-                updates[`portfolio.${stockId}.avgBuyPrice`] = newAvgBuyPrice;
-                updates[`portfolio.${stockId}.totalInvested`] = newTotalInvested;
-                updates[`portfolio.${stockId}.totalShares`] = newTotalShares;
+                updates[`portfolio.${stockId}`] = updatedStockData; // 점 표기법으로 특정 주식 객체 전체 업데이트
                 
                 transaction.update(userDocRef, updates);
 
@@ -1687,20 +1691,17 @@
                 }
                 
                 const newQuantity = currentStockInfo.quantity - quantityToSell;
-                
                 const updates = {};
                 updates.balance = increment(income);
-                updates[`portfolio.${stockId}.quantity`] = newQuantity;
-                
-                if (newQuantity === 0) {
-                    // 전부 매도 시, avgBuyPrice, totalInvested, totalShares는 유지하거나, 필요시 초기화.
-                    // 여기서는 유지하여 다음 매수 시 이전 기록을 바탕으로 평단가 계산.
-                    // 만약 완전히 초기화하고 싶다면 아래 주석 해제 또는 deleteField() 사용.
-                    // updates[`portfolio.${stockId}.avgBuyPrice`] = 0;
-                    // updates[`portfolio.${stockId}.totalInvested`] = 0;
-                    // updates[`portfolio.${stockId}.totalShares`] = 0;
-                }
 
+                if (newQuantity === 0) {
+                    // 전부 매도 시, 해당 주식 필드를 portfolio 맵에서 제거
+                    updates[`portfolio.${stockId}`] = deleteField();
+                } else {
+                    // 부분 매도 시, quantity만 업데이트. avgBuyPrice, totalInvested, totalShares는 유지.
+                    updates[`portfolio.${stockId}.quantity`] = newQuantity;
+                }
+                
                 transaction.update(userDocRef, updates);
 
                 const txColRef = collection(db, "users", currentAuthUser.uid, "transactions");
@@ -2124,7 +2125,7 @@
                     for (const stockId in userData.portfolio) {
                         const item = userData.portfolio[stockId];
                         const stockInfo = stockDataCache[stockId];
-                        if (!stockInfo) continue; // 금(gold) 데이터가 삭제되었으므로, stockInfo가 없을 수 있음
+                        if (!stockInfo) continue; 
                         const li = document.createElement('li');
                         li.className = "flex justify-between items-center";
                         li.innerHTML = `
@@ -2345,6 +2346,7 @@
                         for (const stockId in user.portfolio) {
                             const portfolioItem = user.portfolio[stockId];
                             const stockInfo = stockDataCache[stockId];
+                            // 수익률 계산은 주식을 실제로 보유하고 있고, 평단가가 있는 경우에만 의미가 있음
                             if (portfolioItem && stockInfo && portfolioItem.quantity > 0 && portfolioItem.avgBuyPrice > 0) {
                                 totalPortfolioCostBasis += portfolioItem.avgBuyPrice * portfolioItem.quantity;
                                 totalPortfolioCurrentValue += stockInfo.price * portfolioItem.quantity;
@@ -2353,7 +2355,7 @@
                     }
                     
                     let roi = 0;
-                    if (totalPortfolioCostBasis > 0) {
+                    if (totalPortfolioCostBasis > 0) { // 총 투자 금액이 0보다 클 때만 수익률 계산
                         roi = ((totalPortfolioCurrentValue - totalPortfolioCostBasis) / totalPortfolioCostBasis) * 100;
                     }
                     
