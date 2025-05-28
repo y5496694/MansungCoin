@@ -12,9 +12,9 @@
         - Stock Market: Tabs per stock. Price/Change/Volume (Stats from Firestore), User's AvgBuyPrice & ROI, Price History (Chart.js Line with time filters), Buy/Sell Forms (updates Firestore). AI Stock Analysis (Gemini API).
         - Good Deeds: Submission Form (once per day check), Status List (data from Firestore). AI Deed Story Expansion (Gemini API).
         - Transactions: Table/List with filters (data from Firestore).
-        - Settings: User name change.
+        - Settings: User name change, Password change (requires re-authentication).
         - Board: Notice (Admin write, User read), Freeboard (User write/read/edit-own/delete-own). Posts stored in Firestore.
-        - Admin: Student list with edit name/view details/reset stock buttons, stock fluctuation settings, stock price manual update.
+        - Admin: Student list with edit name/reset password/view details/reset stock buttons, stock fluctuation settings, stock price manual update.
         - Ranking: ROI and Total Asset ranking implemented.
         - All interactions via vanilla JS. Data stored in Firestore. NO SVG/Mermaid. -->
     <style>
@@ -75,7 +75,7 @@
             border-radius: 0.5rem;
             position: relative;
         }
-        .post-modal-content { max-width: 700px; } /* 게시글 모달은 조금 더 넓게 */
+        .post-modal-content { max-width: 700px; } 
         .close-button {
             color: #aaa;
             position: absolute;
@@ -103,7 +103,7 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .post-content { white-space: pre-wrap; } /* 게시글 내용 줄바꿈 적용 */
+        .post-content { white-space: pre-wrap; } 
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
@@ -345,6 +345,24 @@
                         </div>
                         <button type="submit" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform hover:scale-105 text-lg">이름 저장</button>
                     </form>
+                     <div class="mt-6">
+                        <h3 class="text-xl font-semibold text-teal-700 mb-2">비밀번호 변경</h3>
+                        <form id="changePasswordForm" class="space-y-4">
+                            <div>
+                                <label for="currentPassword" class="block text-sm font-medium text-stone-700">현재 비밀번호</label>
+                                <input type="password" id="currentPassword" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm">
+                            </div>
+                            <div>
+                                <label for="newPassword" class="block text-sm font-medium text-stone-700">새 비밀번호</label>
+                                <input type="password" id="newPassword" required minlength="6" class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm">
+                            </div>
+                            <div>
+                                <label for="confirmNewPassword" class="block text-sm font-medium text-stone-700">새 비밀번호 확인</label>
+                                <input type="password" id="confirmNewPassword" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm">
+                            </div>
+                            <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg shadow-md">비밀번호 변경</button>
+                        </form>
+                    </div>
                 </div>
             </section>
 
@@ -509,6 +527,23 @@
         </div>
     </div>
 
+    <div id="adminResetPasswordModal" class="admin-modal">
+        <div class="admin-modal-content">
+            <span id="closeAdminResetPasswordModalBtn" class="close-button">&times;</span>
+            <h3 id="adminResetPasswordModalTitle" class="text-xl font-semibold text-red-600 mb-3">학생 비밀번호 초기화</h3>
+            <p id="adminResetPasswordStudentInfo" class="text-sm text-stone-600 mb-3"></p>
+            <div>
+                <label for="adminNewTemporaryPassword" class="block text-sm font-medium text-stone-700">새 임시 비밀번호</label>
+                <input type="text" id="adminNewTemporaryPassword" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500" value="mansung001">
+            </div>
+            <p class="text-xs text-stone-500 mt-1">학생에게 이 임시 비밀번호를 전달하고, 로그인 후 즉시 변경하도록 안내해주세요.</p>
+            <div class="mt-4 text-right space-x-2">
+                <button id="cancelAdminResetPasswordBtn" class="bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg">취소</button>
+                <button id="adminConfirmResetPasswordBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">임시 비밀번호로 초기화</button>
+            </div>
+        </div>
+    </div>
+
     <div id="postModal" class="post-modal">
         <div class="post-modal-content">
             <span id="closePostModalBtn" class="close-button">&times;</span>
@@ -540,7 +575,10 @@
         signInWithEmailAndPassword, 
         onAuthStateChanged, 
         signOut,
-        updateProfile
+        updateProfile,
+        EmailAuthProvider, 
+        reauthenticateWithCredential,
+        updatePassword
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { 
         getFirestore, 
@@ -658,6 +696,16 @@
     const cancelAdminResetStockBtn = document.getElementById('cancelAdminResetStockBtn');
     let studentIdToResetStock = null;
     let stockIdToReset = null;
+    
+    const adminResetPasswordModal = document.getElementById('adminResetPasswordModal');
+    const adminResetPasswordModalTitle = document.getElementById('adminResetPasswordModalTitle');
+    const adminResetPasswordStudentInfo = document.getElementById('adminResetPasswordStudentInfo');
+    const adminNewTemporaryPasswordInput = document.getElementById('adminNewTemporaryPassword');
+    const adminConfirmResetPasswordBtn = document.getElementById('adminConfirmResetPasswordBtn');
+    const closeAdminResetPasswordModalBtn = document.getElementById('closeAdminResetPasswordModalBtn');
+    const cancelAdminResetPasswordBtn = document.getElementById('cancelAdminResetPasswordBtn');
+    let studentIdToResetPassword = null;
+
 
     const postModal = document.getElementById('postModal');
     const postModalTitleEl = document.getElementById('postModalTitle');
@@ -744,6 +792,20 @@
         stockIdToReset = null;
     }
 
+    function showAdminResetPasswordModal(studentId, studentName, studentEmail) {
+        studentIdToResetPassword = studentId;
+        adminResetPasswordModalTitle.textContent = `${studentName} (${studentEmail}) 비밀번호 초기화`;
+        adminResetPasswordStudentInfo.textContent = `새로운 임시 비밀번호를 설정합니다.`;
+        adminNewTemporaryPasswordInput.value = "mansung001"; // 기본 임시 비밀번호
+        adminResetPasswordModal.style.display = 'block';
+    }
+
+    function closeAdminResetPasswordModal() {
+        adminResetPasswordModal.style.display = 'none';
+        studentIdToResetPassword = null;
+    }
+
+
     function showPostModal(boardType, post = null) {
         postBoardTypeInput.value = boardType;
         if (post) { // 수정 모드
@@ -776,6 +838,8 @@
     cancelAdminEditNameBtn.addEventListener('click', closeAdminEditNameModal);
     closeAdminResetStockModalBtn.addEventListener('click', closeAdminResetStockModal);
     cancelAdminResetStockBtn.addEventListener('click', closeAdminResetStockModal);
+    closeAdminResetPasswordModalBtn.addEventListener('click', closeAdminResetPasswordModal);
+    cancelAdminResetPasswordBtn.addEventListener('click', closeAdminResetPasswordModal);
     closePostModalBtn.addEventListener('click', closePostModal);
 
 
@@ -794,6 +858,9 @@
         }
         if (event.target == adminResetStockModal) {
             closeAdminResetStockModal();
+        }
+        if (event.target == adminResetPasswordModal) {
+            closeAdminResetPasswordModal();
         }
         if (event.target == postModal) {
             closePostModal();
@@ -828,6 +895,7 @@
     const adminStockFluctuationSettingsEl = document.getElementById('adminStockFluctuationSettings');
     const settingsForm = document.getElementById('settingsForm');
     const userNameInput = document.getElementById('userName');
+    const changePasswordForm = document.getElementById('changePasswordForm');
     const rankingContentTotalAsset = document.getElementById('rankingContentTotalAsset');
     const rankingContentRoi = document.getElementById('rankingContentRoi');
     const totalAssetRankingListEl = document.getElementById('totalAssetRankingList');
@@ -898,7 +966,7 @@
         if (currentAuthUser) { 
             if (sectionId === 'dashboard') updateDashboardDisplay();
             if (sectionId === 'market') loadAndRenderMarketTabs();
-            if (sectionId === 'board') loadAndRenderBoard('notice'); // 기본으로 공지사항 로드
+            if (sectionId === 'board') loadAndRenderBoard('notice'); 
             if (sectionId === 'transactions') renderTransactions();
             if (sectionId === 'deeds') renderDeeds();
             if (sectionId === 'settings') loadUserSettings();
@@ -949,7 +1017,7 @@
             if (currentUserData && currentUserData.role === 'teacher') {
                 adminNavLink.classList.remove('hidden');
                 adminDivider.classList.remove('hidden');
-                newNoticePostBtn.classList.remove('hidden'); // 관리자일 경우 공지 작성 버튼 표시
+                newNoticePostBtn.classList.remove('hidden'); 
             } else {
                 adminNavLink.classList.add('hidden');
                 adminDivider.classList.add('hidden');
@@ -1127,7 +1195,6 @@
             console.error("Error in stocks onSnapshot:", error);
         });
 
-        // 게시판 리스너 추가
         const noticeQuery = query(collection(db, "boards", "notice", "posts"), orderBy("createdAt", "desc"));
         unsubscribeNoticePostsListener = onSnapshot(noticeQuery, (snapshot) => {
             if (document.getElementById('board').classList.contains('hidden') === false && document.getElementById('boardContentNotice').classList.contains('hidden') === false) {
@@ -1203,7 +1270,38 @@
         try {
             await signInWithEmailAndPassword(auth, email, password);
         } catch (error) {
-            console.error("Login error:", error);
+            console.warn("Standard login failed, trying temporary password:", error.code);
+            // 표준 로그인 실패 시 임시 비밀번호로 로그인 시도
+            if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') { // 좀 더 포괄적인 오류 코드 추가
+                try {
+                    const usersRef = collection(db, "users");
+                    const q = query(usersRef, where("email", "==", email));
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        const userDoc = querySnapshot.docs[0];
+                        const userData = userDoc.data();
+                        if (userData.temporaryPassword && userData.temporaryPassword === password) {
+                            // 임시 비밀번호로 로그인 성공 처리 (실제 Auth 로그인은 아님)
+                            // Firebase Auth 상태를 직접 변경할 수 없으므로, UI 업데이트 및 데이터 로드만 수행
+                            currentAuthUser = { uid: userDoc.id, email: userData.email, displayName: userData.name }; // 임시 Auth User 객체
+                            await loadCurrentUserData(userDoc.id);
+                            attachRealtimeListeners(userDoc.id);
+                            startStockUpdates();
+                            if (currentUserData && currentUserData.role === 'teacher') {
+                                adminNavLink.classList.remove('hidden');
+                                adminDivider.classList.remove('hidden');
+                            }
+                            showSection('dashboard');
+                            showInfoModal("임시 비밀번호 로그인 성공", "보안을 위해 즉시 '환경 설정'에서 새 비밀번호로 변경해주세요!");
+                            loginForm.reset();
+                            return;
+                        }
+                    }
+                } catch (dbError) {
+                    console.error("Error checking temporary password in Firestore:", dbError);
+                }
+            }
             authErrorEl.textContent = `로그인 실패: ${mapAuthErrorCodeToMessage(error.code)}`;
             authErrorEl.classList.remove('hidden');
         }
@@ -1246,6 +1344,7 @@
             case 'auth/user-disabled': return '사용 중지된 계정입니다.';
             case 'auth/user-not-found': return '사용자를 찾을 수 없습니다.';
             case 'auth/wrong-password': return '잘못된 비밀번호입니다.';
+            case 'auth/invalid-credential': return '이메일 또는 비밀번호가 잘못되었습니다.';
             case 'auth/email-already-in-use': return '이미 사용 중인 이메일 주소입니다.';
             case 'auth/weak-password': return '비밀번호는 6자 이상이어야 합니다.';
             case 'auth/operation-not-allowed': return '이메일/비밀번호 로그인이 활성화되지 않았습니다.';
@@ -1818,9 +1917,11 @@
                 if (newQuantity === 0) {
                     updates[`portfolio.${stockId}`] = deleteField();
                 } else {
-                    // 매도 시에는 avgBuyPrice, totalInvested, totalShares를 변경하지 않고 quantity만 업데이트합니다.
-                    // 이 필드들은 매수 시에만 누적/재계산됩니다.
-                    updates[`portfolio.${stockId}.quantity`] = newQuantity;
+                    const updatedStockData = {
+                        ...currentStockInfo, // 기존 avgBuyPrice, totalInvested, totalShares 유지
+                        quantity: newQuantity
+                    };
+                    updates[`portfolio.${stockId}`] = updatedStockData;
                 }
                 
                 transaction.update(userDocRef, updates);
@@ -2062,6 +2163,49 @@
         }
     });
 
+    changePasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentAuthUser) {
+            showInfoModal("오류", "로그인이 필요합니다.");
+            return;
+        }
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            showInfoModal("오류", "모든 비밀번호 필드를 입력해주세요.");
+            return;
+        }
+        if (newPassword !== confirmNewPassword) {
+            showInfoModal("오류", "새 비밀번호와 확인 비밀번호가 일치하지 않습니다.");
+            return;
+        }
+        if (newPassword.length < 6) {
+            showInfoModal("오류", "새 비밀번호는 6자 이상이어야 합니다.");
+            return;
+        }
+
+        try {
+            const credential = EmailAuthProvider.credential(currentAuthUser.email, currentPassword);
+            await reauthenticateWithCredential(currentAuthUser, credential);
+            await updatePassword(currentAuthUser, newPassword);
+            
+            // Firestore에 저장된 temporaryPassword 필드 삭제 (만약 있었다면)
+            const userDocRef = doc(db, "users", currentAuthUser.uid);
+            await updateDoc(userDocRef, {
+                temporaryPassword: deleteField()
+            });
+
+            showInfoModal("성공", "비밀번호가 성공적으로 변경되었습니다.");
+            changePasswordForm.reset();
+
+        } catch (error) {
+            console.error("Error changing password:", error);
+            showInfoModal("오류", `비밀번호 변경 중 오류 발생: ${mapAuthErrorCodeToMessage(error.code)}`);
+        }
+    });
+
 
     // --- Admin Logic ---
     async function loadAdminData() {
@@ -2086,6 +2230,7 @@
                     </div>
                     <div class="flex space-x-1">
                         <button data-studentid="${studentId}" data-studentname="${student.name}" class="admin-edit-name-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2 rounded">이름변경</button>
+                        <button data-studentid="${studentId}" data-studentname="${student.name}" data-studentemail="${student.email}" class="admin-reset-password-btn bg-pink-500 hover:bg-pink-600 text-white text-xs py-1 px-2 rounded">비번초기화</button>
                         <button data-studentid="${studentId}" data-studentname="${student.name}" data-currentbalance="${student.balance}" class="admin-adjust-balance-btn bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 px-2 rounded">잔액조정</button>
                         <button data-studentid="${studentId}" data-studentname="${student.name}" class="admin-view-details-btn bg-purple-500 hover:bg-purple-600 text-white text-xs py-1 px-2 rounded">상세보기</button>
                     </div>
@@ -2105,6 +2250,14 @@
                     const studentId = e.target.dataset.studentid;
                     const studentName = e.target.dataset.studentname;
                     showAdminEditNameModal(studentId, studentName);
+                });
+            });
+            document.querySelectorAll('.admin-reset-password-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const studentId = e.target.dataset.studentid;
+                    const studentName = e.target.dataset.studentname;
+                    const studentEmail = e.target.dataset.studentemail;
+                    showAdminResetPasswordModal(studentId, studentName, studentEmail);
                 });
             });
              document.querySelectorAll('.admin-view-details-btn').forEach(button => {
@@ -2213,9 +2366,9 @@
             const studentDocRef = doc(db, "users", studentIdToEditName);
             await updateDoc(studentDocRef, { name: newName });
 
-            const targetAuthUser = auth.currentUser; 
-            if (targetAuthUser && studentIdToEditName === targetAuthUser.uid) { 
-                 await updateProfile(targetAuthUser, { displayName: newName });
+            // 만약 관리자가 현재 로그인한 사용자의 이름을 변경하는 경우, Auth 프로필도 업데이트
+            if (currentAuthUser && studentIdToEditName === currentAuthUser.uid) { 
+                 await updateProfile(currentAuthUser, { displayName: newName });
                  loggedInUserDisplay.textContent = newName; 
             }
 
@@ -2228,6 +2381,25 @@
             showInfoModal("오류", `이름 변경 중 오류 발생: ${error.message}`);
         }
     });
+    
+    adminConfirmResetPasswordBtn.addEventListener('click', async () => {
+        if (!studentIdToResetPassword) return;
+        const newTemporaryPassword = adminNewTemporaryPasswordInput.value.trim();
+        if (!newTemporaryPassword || newTemporaryPassword.length < 6) {
+            showInfoModal("오류", "임시 비밀번호는 6자 이상이어야 합니다.");
+            return;
+        }
+        try {
+            const studentDocRef = doc(db, "users", studentIdToResetPassword);
+            await updateDoc(studentDocRef, { temporaryPassword: newTemporaryPassword });
+            showInfoModal("성공", `학생의 임시 비밀번호가 "${newTemporaryPassword}"로 설정되었습니다. 학생에게 전달해주세요.`);
+            closeAdminResetPasswordModal();
+        } catch (error) {
+            console.error("Error resetting student password:", error);
+            showInfoModal("오류", `임시 비밀번호 설정 중 오류 발생: ${error.message}`);
+        }
+    });
+
 
     async function loadAndShowAdminUserDetail(studentId, studentName) {
         adminUserDetailNameEl.textContent = `${studentName} 학생 상세 정보`;
@@ -2556,22 +2728,21 @@
             title: title,
             content: content,
             authorUid: currentAuthUser.uid,
-            authorName: currentUserData.name || currentAuthUser.email, // 현재 사용자 이름 사용
+            authorName: currentUserData.name || currentAuthUser.email, 
             updatedAt: serverTimestamp()
         };
 
         try {
-            if (postId) { // 글 수정
+            if (postId) { 
                 const postRef = doc(db, "boards", boardType, "posts", postId);
                 await updateDoc(postRef, postData);
                 showInfoModal("성공", "글이 수정되었습니다.");
-            } else { // 새 글 작성
+            } else { 
                 postData.createdAt = serverTimestamp();
                 await addDoc(collection(db, "boards", boardType, "posts"), postData);
                 showInfoModal("성공", "글이 작성되었습니다.");
             }
             closePostModal();
-            // loadAndRenderBoard(boardType); // onSnapshot이 처리
         } catch (error) {
             console.error(`Error saving post to ${boardType}:`, error);
             showInfoModal("오류", "글을 저장하는 중 오류가 발생했습니다.");
@@ -2582,11 +2753,6 @@
         const listEl = boardType === 'notice' ? noticePostListEl : freePostListEl;
         listEl.innerHTML = `<li class="text-center text-stone-500 py-4">${boardType === 'notice' ? '공지사항' : '게시글'}을 불러오는 중...</li>`;
         
-        // onSnapshot 리스너가 이미 데이터를 가져오고 renderPosts를 호출하므로,
-        // 여기서는 UI만 초기화하고, 필요시 onSnapshot에서 renderPosts를 직접 호출하도록 유도.
-        // 만약 onSnapshot이 아직 데이터를 가져오지 않았다면, 이 메시지가 잠시 보일 수 있음.
-        // 실시간 업데이트를 위해 onSnapshot을 사용하므로, 여기서 직접 getDocs를 호출하는 것은 중복될 수 있음.
-        // 대신, onSnapshot 콜백에서 해당 게시판이 활성화되어 있을 때만 renderPosts를 호출하도록 함.
         const querySnapshot = await getDocs(query(collection(db, "boards", boardType, "posts"), orderBy("createdAt", "desc")));
         renderPosts(boardType, querySnapshot);
     }
@@ -2621,7 +2787,6 @@
             listEl.appendChild(li);
         });
 
-        // 이벤트 리스너 위임 (동적으로 생성된 버튼에 대해)
         listEl.addEventListener('click', async (e) => {
             const target = e.target;
             const boardType = target.dataset.boardtype;
@@ -2637,7 +2802,6 @@
                     try {
                         await deleteDoc(doc(db, "boards", boardType, "posts", postId));
                         showInfoModal("성공", "글이 삭제되었습니다.");
-                        // loadAndRenderBoard(boardType); // onSnapshot이 처리
                     } catch (error) {
                         console.error("Error deleting post:", error);
                         showInfoModal("오류", "글 삭제 중 오류 발생");
@@ -2647,7 +2811,7 @@
                 const postDoc = await getDoc(doc(db, "boards", boardType, "posts", postId));
                  if (postDoc.exists()) {
                     const postData = postDoc.data();
-                    showInfoModal(postData.title, postData.content); // 간단히 infoModal 재활용
+                    showInfoModal(postData.title, postData.content); 
                 }
             }
         });
