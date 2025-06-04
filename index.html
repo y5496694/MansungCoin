@@ -1339,6 +1339,8 @@
         authErrorEl.classList.add('hidden');
         try {
             await signInWithEmailAndPassword(auth, email, password);
+            showSection('dashboard');
+            loginForm.reset();
         } catch (error) {
             console.warn("Standard login failed, trying temporary password:", error.code);
             // 표준 로그인 실패 시 임시 비밀번호로 로그인 시도
