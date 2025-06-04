@@ -589,7 +589,12 @@
             });
         } catch (error) {
             console.error('Error loading deeds for admin:', error);
-            adminDeedApprovalListEl.innerHTML = '<p class="text-red-500">선행 목록 로드 실패.</p>';
+            if (error.code === 'failed-precondition' && /index/i.test(error.message)) {
+                adminDeedApprovalListEl.innerHTML =
+                    '<p class="text-red-500">선행 목록 로드 실패: Firestore 색인이 필요합니다. README의 "Firestore Index Setup" 절을 참고하세요.</p>';
+            } else {
+                adminDeedApprovalListEl.innerHTML = '<p class="text-red-500">선행 목록 로드 실패.</p>';
+            }
         }
     }
 
