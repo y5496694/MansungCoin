@@ -10,5 +10,6 @@ export const formatDate = (date) => {
     date = date.toDate();
   }
   const d = new Date(date);
+  if (isNaN(d)) return '날짜 정보 없음';
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
