@@ -609,6 +609,7 @@
         limit,
         deleteField
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { formatCurrency, formatDate } from './utils.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyDCeJPDQUNi-KmJ9DhkTRIu-9t2PGZCpt0",
@@ -643,15 +644,7 @@
     const stockChartInstances = {};
 
     // --- Utility Functions ---
-    const formatCurrency = (amount) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount);
-    const formatDate = (date) => {
-        if (!date) return '날짜 정보 없음';
-        if (date instanceof Timestamp) { 
-            date = date.toDate();
-        }
-        const d = new Date(date);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    };
+    // formatCurrency and formatDate are imported from utils.js
      const isSameDay = (date1, date2) => {
         if (!date1 || !date2) return false;
         const d1 = (date1 instanceof Timestamp) ? date1.toDate() : new Date(date1);
