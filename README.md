@@ -9,11 +9,14 @@ This project is a simple economy simulation for students. All data is stored in 
 npm install
 ```
    If you cannot access the npm registry, you may skip this step and run only the static HTML.
-2. Open `index.html` in a browser. The app expects Firebase to be reachable. You should replace the Firebase configuration in `index.html` with your own project settings.
+2. Open `index.html` in a browser. The app expects Firebase to be reachable.
+   **Important:** replace the sample `firebaseConfig` object in `index.html` with
+   your own Firebase project credentials. The app now warns if the default
+   configuration is still present.
 
 ## Login Troubleshooting
 
-If login fails with a network error, ensure your internet connection is available. The app now displays a clearer message for `auth/network-request-failed` errors.
+If login fails with a network error, ensure your internet connection is available. A warning will also appear if the Firebase configuration was not replaced, which can cause `auth/invalid-api-key` errors during login.
 
 ## Store Feature
 
