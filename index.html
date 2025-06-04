@@ -253,7 +253,7 @@
                         <div class="mt-4"><h4 class="text-md font-semibold text-red-500 mb-1">주식 가격 수동 변경</h4><select id="adminStockSelect" class="p-2 border rounded mb-2 w-full"></select><input type="number" id="adminNewPrice" placeholder="새 가격" class="p-2 border rounded w-full mb-2"><button id="adminUpdatePriceBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg text-sm w-full">가격 업데이트</button></div>
                         <div id="adminStockFluctuationSettings" class="mt-6"><h4 class="text-md font-semibold text-red-500 mb-1">주식 변동폭 설정</h4></div>
                     </div>
-                    <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-xl font-semibold text-red-600 mb-2">선행 승인 관리</h3><p class="text-sm text-stone-500 mb-2">현재 자동 승인. 수동 승인 기능은 추후 구현.</p></div>
+                    <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-xl font-semibold text-red-600 mb-2">선행 승인 관리</h3><div id="adminDeedApprovalList" class="space-y-3 max-h-96 overflow-y-auto"><p class="text-stone-500">선행 목록을 불러오는 중...</p></div></div>
                     <div class="bg-white p-6 rounded-xl shadow-lg md:col-span-1 lg:col-span-1">
                         <h3 class="text-xl font-semibold text-purple-600 mb-2">🛍️ 상점 물품 관리</h3><button id="adminAddNewShopItemBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg text-sm mb-4">새 상점물품 등록</button><div id="adminShopItemList" class="space-y-3 max-h-96 overflow-y-auto"><p class="text-stone-500">상점 물품 목록을 불러오는 중...</p></div>
                     </div>
@@ -519,6 +519,80 @@
         if (event.target == placeBidModal) closePlaceBidModal();
     }
 
+    async function loadAdminDeeds() {
+        if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') {
+            adminDeedApprovalListEl.innerHTML = '<p class="text-stone-500">선행 관리는 관리자만 가능합니다.</p>'; return;
+        }
+        adminDeedApprovalListEl.innerHTML = '<p class="text-stone-500">선행 목록을 불러오는 중...</p>';
+        try {
+            const q = query(collectionGroup(db, 'deeds'), where('status', 'in', ['pending', 'rewrite']), orderBy('date', 'asc'));
+            const snapshot = await getDocs(q);
+            adminDeedApprovalListEl.innerHTML = '';
+            if (snapshot.empty) { adminDeedApprovalListEl.innerHTML = '<p class="text-stone-500">검토할 선행이 없습니다.</p>'; return; }
+            snapshot.forEach(docSnap => {
+                const parentUid = docSnap.ref.parent.parent.id;
+                const deed = { id: docSnap.id, userUid: parentUid, ...docSnap.data() };
+                const div = document.createElement('div');
+                div.className = 'bg-stone-50 p-3 rounded-md border border-stone-200 flex justify-between items-start';
+                div.innerHTML = `
+                    <div>
+                        <p class="font-medium">${deed.authorName || deed.userUid}</p>
+                        <p class="text-sm text-stone-700">${deed.description}</p>
+                        <p class="text-xs text-stone-500">${formatDate(deed.date)} - 상태: ${deed.status === 'pending' ? '승인대기' : '재작성 필요'}</p>
+                    </div>
+                    <div class="space-x-2 flex-shrink-0">
+                        <button data-userid="${deed.userUid}" data-deedid="${deed.id}" data-reward="${deed.reward}" data-desc="${deed.description}" class="admin-approve-deed-btn bg-teal-500 hover:bg-teal-600 text-white text-xs py-1 px-2 rounded">승인</button>
+                        <button data-userid="${deed.userUid}" data-deedid="${deed.id}" class="admin-rewrite-deed-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2 rounded">재작성</button>
+                    </div>`;
+                adminDeedApprovalListEl.appendChild(div);
+            });
+            document.querySelectorAll('.admin-approve-deed-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const deedId = e.target.dataset.deedid;
+                    const userId = e.target.dataset.userid;
+                    const reward = parseInt(e.target.dataset.reward);
+                    const desc = e.target.dataset.desc;
+                    try {
+                        const userRef = doc(db, 'users', userId);
+                        const deedRef = doc(db, 'users', userId, 'deeds', deedId);
+                        await runTransaction(db, async (tx) => {
+                            tx.update(userRef, { balance: increment(reward) });
+                            tx.update(deedRef, { status: 'approved', updatedAt: serverTimestamp() });
+                            tx.set(doc(collection(userRef, 'transactions')), {
+                                type: 'deed',
+                                description: `선행보상: ${desc.substring(0,20)}...`,
+                                amount: reward,
+                                date: serverTimestamp()
+                            });
+                        });
+                        showInfoModal('성공', '선행을 승인했습니다.');
+                        loadAdminDeeds();
+                    } catch (error) {
+                        console.error('Error approving deed:', error);
+                        showInfoModal('오류', '선행 승인 중 오류가 발생했습니다.');
+                    }
+                });
+            });
+            document.querySelectorAll('.admin-rewrite-deed-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const deedId = e.target.dataset.deedid;
+                    const userId = e.target.dataset.userid;
+                    try {
+                        await updateDoc(doc(db, 'users', userId, 'deeds', deedId), { status: 'rewrite', updatedAt: serverTimestamp() });
+                        showInfoModal('요청 완료', '재작성을 요청했습니다.');
+                        loadAdminDeeds();
+                    } catch (error) {
+                        console.error('Error requesting rewrite:', error);
+                        showInfoModal('오류', '재작성 요청 중 오류가 발생했습니다.');
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('Error loading deeds for admin:', error);
+            adminDeedApprovalListEl.innerHTML = '<p class="text-red-500">선행 목록 로드 실패.</p>';
+        }
+    }
+
     // --- DOM Elements ---
     const sections = document.querySelectorAll('main section'); /* ... */
     const navLinks = document.querySelectorAll('.nav-link');
@@ -566,9 +640,10 @@
     const freePostListEl = document.getElementById('freePostList');
     const newNoticePostBtn = document.getElementById('newNoticePostBtn');
     const newFreePostBtn = document.getElementById('newFreePostBtn');
-    const shopItemListEl = document.getElementById('shopItemList'); 
-    const adminShopItemListEl = document.getElementById('adminShopItemList'); 
+    const shopItemListEl = document.getElementById('shopItemList');
+    const adminShopItemListEl = document.getElementById('adminShopItemList');
     const adminAddNewShopItemBtn = document.getElementById('adminAddNewShopItemBtn');
+    const adminDeedApprovalListEl = document.getElementById('adminDeedApprovalList');
     // Auction DOM Elements
     const auctionTabButtons = document.querySelectorAll('.auction-tab-button');
     const auctionContentActiveEl = document.getElementById('auctionContentActive');
@@ -599,7 +674,7 @@
             if (sectionId === 'deeds') renderDeeds();
             if (sectionId === 'settings') loadUserSettings();
             if (sectionId === 'ranking') loadRankingData('totalAsset');
-            if (sectionId === 'admin' && currentUserData && currentUserData.role === 'teacher') { loadAdminData(); loadAdminShopItems(); loadAdminAuctionItems(); }
+            if (sectionId === 'admin' && currentUserData && currentUserData.role === 'teacher') { loadAdminData(); loadAdminDeeds(); loadAdminShopItems(); loadAdminAuctionItems(); }
         }
     }
     document.getElementById('switchToRegister').addEventListener('click', (e) => { e.preventDefault(); showSection('register', true); });
@@ -713,9 +788,87 @@
     async function handleSellStock(e) { /* ... */ e.preventDefault(); if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; } const stockId = e.target.stockId.value; const quantityToSell = parseInt(e.target.quantity.value); const stock = stockDataCache[stockId]; if (!stock || typeof stock.price !== 'number') { showInfoModal('오류', '주식 가격 정보를 가져올 수 없습니다.'); return; } const portfolioItem = currentUserData.portfolio?.[stockId]; const currentHoldings = portfolioItem?.quantity || 0; const avgBuyPrice = portfolioItem?.avgBuyPrice || 0; if (isNaN(quantityToSell) || quantityToSell <= 0) { showInfoModal('오류', '올바른 수량을 입력해주세요.'); return; } if (quantityToSell > currentHoldings) { showInfoModal('오류', '보유 수량이 부족합니다.'); return; } const income = quantityToSell * stock.price; const profitOrLoss = (stock.price - avgBuyPrice) * quantityToSell; try { const userDocRef = doc(db, "users", currentAuthUser.uid); await runTransaction(db, async (transaction) => { const userSnap = await transaction.get(userDocRef); if (!userSnap.exists()) throw new Error("사용자 정보를 찾을 수 없습니다."); const currentPortfolio = userSnap.data().portfolio || {}; const currentStockInfo = currentPortfolio[stockId]; if (!currentStockInfo || currentStockInfo.quantity < quantityToSell) throw new Error("보유 수량이 부족합니다. (트랜잭션 확인)"); const newQuantity = currentStockInfo.quantity - quantityToSell; const updates = { balance: increment(income) }; if (newQuantity === 0) updates[`portfolio.${stockId}`] = deleteField(); else updates[`portfolio.${stockId}`] = { ...currentStockInfo, quantity: newQuantity }; transaction.update(userDocRef, updates); transaction.set(doc(collection(db, "users", currentAuthUser.uid, "transactions")), {type: 'sell', description: `${stock.name} ${quantityToSell}주 매도 (손익: ${formatCurrency(profitOrLoss)})`, amount: income, stockId: stockId, quantity: quantityToSell, pricePerStock: stock.price, profitOrLoss: profitOrLoss, date: serverTimestamp()}); }); showInfoModal('매도 성공', `${stock.name} ${quantityToSell}주를 ${formatCurrency(income)}에 매도했습니다. (손익: ${formatCurrency(profitOrLoss)})`); e.target.reset(); document.getElementById(`sellEstimate-${stockId}`).textContent = '0 원'; } catch (error) { showInfoModal('매도 실패', `매도 중 오류 발생: ${error.message}`); }}
 
     // --- Deeds Logic ---
-    deedForm.addEventListener('submit', async (e) => { /* ... */ e.preventDefault(); if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; } const description = deedDescriptionEl.value.trim(); if (!description) { showInfoModal('오류', '선행 내용을 입력해주세요.'); return; } const deedsColRefQuery = query(collection(db, "users", currentAuthUser.uid, "deeds"), orderBy("date", "desc"), limit(1)); const lastDeedSnapshot = await getDocs(deedsColRefQuery); if (!lastDeedSnapshot.empty) { const lastDeedData = lastDeedSnapshot.docs[0].data(); if (lastDeedData.date && isSameDay(lastDeedData.date, new Date())) { showInfoModal("알림", "오늘은 이미 선행을 등록했어요! 내일 다시 시도해주세요."); return; }} const reward = 1000; try { await updateDoc(doc(db, "users", currentAuthUser.uid), { balance: increment(reward) }); await addDoc(collection(db, "users", currentAuthUser.uid, "deeds"), {description: description, reward: reward, status: 'approved', date: serverTimestamp()}); await addDoc(collection(db, "users", currentAuthUser.uid, "transactions"), {type: 'deed', description: `선행보상: ${description.substring(0,20)}...`, amount: reward, date: serverTimestamp()}); showInfoModal('선행 등록 완료', `"${description.substring(0,30)}..." 선행으로 ${formatCurrency(reward)}이 입금되었습니다!`); deedForm.reset(); } catch (error) { showInfoModal("선행 등록 실패", "선행 등록 중 오류가 발생했습니다."); }});
-    function renderDeeds() { /* ... */ if (!currentUserData || !currentUserData.deeds) { deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">선행 기록을 불러오는 중...</li>'; return; } deedListEl.innerHTML = ''; if (currentUserData.deeds.length === 0) { deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">등록된 선행이 없습니다.</li>'; return; } currentUserData.deeds.forEach(deed => { const li = document.createElement('li'); li.className = 'p-4 bg-white rounded-lg shadow-sm border border-stone-200 flex justify-between items-center'; const deedTextDiv = document.createElement('div'); deedTextDiv.innerHTML = `<p class="font-medium text-stone-700">${deed.description}</p><p class="text-xs text-stone-500">${formatDate(deed.date)} - ${formatCurrency(deed.reward)}</p>`; const buttonsDiv = document.createElement('div'); buttonsDiv.className = 'flex flex-col sm:flex-row items-end space-y-2 sm:space-y-0 sm:space-x-2'; const statusSpan = document.createElement('span'); statusSpan.className = `text-xs font-semibold ${deed.status === 'approved' ? 'text-green-600 bg-green-100' : 'text-amber-600 bg-amber-100'} px-2 py-1 rounded-full mb-2 sm:mb-0`; statusSpan.textContent = deed.status === 'approved' ? '보상완료' : '승인대기'; const aiButton = document.createElement('button'); aiButton.className = 'bg-purple-500 hover:bg-purple-600 text-white font-semibold py-1 px-2 rounded-lg text-xs transition-transform hover:scale-105'; aiButton.innerHTML = '✨ 이야기 확장'; aiButton.onclick = () => handleAiDeedStory(deed.description); buttonsDiv.appendChild(statusSpan); buttonsDiv.appendChild(aiButton); li.appendChild(deedTextDiv); li.appendChild(buttonsDiv); deedListEl.appendChild(li); });}
+    deedForm.addEventListener('submit', async (e) => { /* ... */
+        e.preventDefault();
+        if (!currentAuthUser || !currentUserData) { showInfoModal('오류', '로그인이 필요합니다.'); return; }
+        const description = deedDescriptionEl.value.trim();
+        if (!description) { showInfoModal('오류', '선행 내용을 입력해주세요.'); return; }
+        const deedsColRefQuery = query(collection(db, "users", currentAuthUser.uid, "deeds"), orderBy("date", "desc"), limit(1));
+        const lastDeedSnapshot = await getDocs(deedsColRefQuery);
+        if (!lastDeedSnapshot.empty) {
+            const lastDeedData = lastDeedSnapshot.docs[0].data();
+            if (lastDeedData.date && isSameDay(lastDeedData.date, new Date()) && lastDeedData.status !== 'rewrite') {
+                showInfoModal('알림', '오늘은 이미 선행을 등록했어요! 내일 다시 시도해주세요.');
+                return;
+            }
+        }
+        const reward = 1000;
+        try {
+            await addDoc(collection(db, "users", currentAuthUser.uid, "deeds"), {
+                description: description,
+                reward: reward,
+                status: 'pending',
+                authorUid: currentAuthUser.uid,
+                authorName: currentUserData.name,
+                date: serverTimestamp()
+            });
+            showInfoModal('선행 등록 완료', '관리자 승인 후 보상이 지급됩니다.');
+            deedForm.reset();
+        } catch (error) {
+            showInfoModal('선행 등록 실패', '선행 등록 중 오류가 발생했습니다.');
+        }
+    });
+    function renderDeeds() { /* ... */
+        if (!currentUserData || !currentUserData.deeds) { deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">선행 기록을 불러오는 중...</li>'; return; }
+        deedListEl.innerHTML = '';
+        if (currentUserData.deeds.length === 0) { deedListEl.innerHTML = '<li class="p-3 bg-stone-50 rounded-md border border-stone-200 text-center text-stone-500">등록된 선행이 없습니다.</li>'; return; }
+        currentUserData.deeds.forEach(deed => {
+            const li = document.createElement('li');
+            li.className = 'p-4 bg-white rounded-lg shadow-sm border border-stone-200 flex justify-between items-center';
+            const deedTextDiv = document.createElement('div');
+            deedTextDiv.innerHTML = `<p class="font-medium text-stone-700">${deed.description}</p><p class="text-xs text-stone-500">${formatDate(deed.date)} - ${formatCurrency(deed.reward)}</p>`;
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.className = 'flex flex-col sm:flex-row items-end space-y-2 sm:space-y-0 sm:space-x-2';
+            const statusSpan = document.createElement('span');
+            let statusClass = 'text-amber-600 bg-amber-100';
+            let statusText = '승인대기';
+            if (deed.status === 'approved') { statusClass = 'text-green-600 bg-green-100'; statusText = '보상완료'; }
+            else if (deed.status === 'rewrite') { statusClass = 'text-red-600 bg-red-100'; statusText = '재작성 필요'; }
+            statusSpan.className = `text-xs font-semibold ${statusClass} px-2 py-1 rounded-full mb-2 sm:mb-0`;
+            statusSpan.textContent = statusText;
+            const aiButton = document.createElement('button');
+            aiButton.className = 'bg-purple-500 hover:bg-purple-600 text-white font-semibold py-1 px-2 rounded-lg text-xs transition-transform hover:scale-105';
+            aiButton.innerHTML = '✨ 이야기 확장';
+            aiButton.onclick = () => handleAiDeedStory(deed.description);
+            buttonsDiv.appendChild(statusSpan);
+            if (deed.status === 'rewrite') {
+                const editBtn = document.createElement('button');
+                editBtn.className = 'bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-1 px-2 rounded-lg text-xs';
+                editBtn.textContent = '수정';
+                editBtn.onclick = () => editDeed(deed);
+                buttonsDiv.appendChild(editBtn);
+            }
+            buttonsDiv.appendChild(aiButton);
+            li.appendChild(deedTextDiv);
+            li.appendChild(buttonsDiv);
+            deedListEl.appendChild(li);
+        });
+    }
     async function handleAiDeedStory(deedDescription) { /* ... */ const prompt = `초등학생이 작성한 "${deedDescription}"라는 선행 내용이 있습니다. 이 선행을 바탕으로, 어린이가 이해하기 쉽고 긍정적인 칭찬과 함께 이야기를 조금 더 구체적이고 재미있게 확장해주세요. 예를 들어, 그 선행이 다른 사람에게 어떤 좋은 영향을 주었는지, 또는 그 선행을 통해 무엇을 배웠는지 등을 포함할 수 있습니다. 150자 이내로 작성해주세요.`; generateTextViaGemini(prompt); }
+    async function editDeed(deed) {
+        const newDesc = prompt('새 선행 내용을 입력하세요', deed.description);
+        if (!newDesc) return;
+        try {
+            await updateDoc(doc(db, 'users', currentAuthUser.uid, 'deeds', deed.id), {
+                description: newDesc,
+                status: 'pending',
+                updatedAt: serverTimestamp()
+            });
+            showInfoModal('수정 완료', '선행 내용이 수정되었습니다. 다시 승인을 기다려주세요.');
+        } catch (error) {
+            showInfoModal('오류', '선행 수정 중 오류가 발생했습니다.');
+        }
+    }
 
     // --- Transactions Logic ---
     function renderTransactions() { /* ... */ if (!currentUserData || !currentUserData.transactions) { transactionListEl.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-stone-500">거래 내역을 불러오는 중...</td></tr>'; return; } transactionListEl.innerHTML = ''; const filterValue = transactionFilterEl.value; const filteredTransactions = currentUserData.transactions.filter(tx => (filterValue === 'all' || tx.type === filterValue)); if (filteredTransactions.length === 0) { transactionListEl.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-stone-500">해당 종류의 거래 내역이 없습니다.</td></tr>'; return; } filteredTransactions.forEach(tx => { const tr = document.createElement('tr'); let amountDisplay = ''; let balanceAfterTxDisplay = 'N/A'; switch (tx.type) { case 'transfer_in': amountDisplay = `<span class="text-sky-600 font-semibold">+${formatCurrency(tx.amount)}</span>`; break; case 'transfer_out': amountDisplay = `<span class="text-red-600 font-semibold">-${formatCurrency(tx.amount)}</span>`; break; case 'buy': amountDisplay = `<span class="text-red-600">${formatCurrency(tx.amount)} (${tx.quantity}주)</span>`; break; case 'sell': amountDisplay = `<span class="text-sky-600">+${formatCurrency(tx.amount)} (${tx.quantity}주)</span>`; if (tx.profitOrLoss !== undefined) amountDisplay += ` (손익: ${formatCurrency(tx.profitOrLoss)})`; break; case 'deed': amountDisplay = `<span class="text-amber-600 font-semibold">+${formatCurrency(tx.amount)}</span>`; break; case 'admin_credit': amountDisplay = `<span class="text-blue-600 font-semibold">+${formatCurrency(tx.amount)}</span>`; break; case 'admin_debit': amountDisplay = `<span class="text-orange-600 font-semibold">-${formatCurrency(tx.amount)}</span>`; break; case 'auction_bid': amountDisplay = `<span class="text-red-700 font-semibold">-${formatCurrency(tx.amount)}</span>`; break; case 'auction_bid_cancel': amountDisplay = `<span class="text-green-700 font-semibold">+${formatCurrency(tx.amount)}</span>`; break; case 'auction_refund_lost': amountDisplay = `<span class="text-sky-700 font-semibold">+${formatCurrency(tx.amount)}</span>`; break; default: amountDisplay = formatCurrency(tx.amount); } tr.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">${formatDate(tx.date)}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-stone-900">${getTransactionTypeKorean(tx.type)}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-stone-500">${tx.description}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right">${amountDisplay}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-right text-stone-500">${balanceAfterTxDisplay}</td>`; transactionListEl.appendChild(tr); });}
