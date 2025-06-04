@@ -21,3 +21,18 @@ If login fails with a network error, ensure your internet connection is availabl
 ## Store Feature
 
 Teachers can add new products via the **상점** page. When no items exist, a helpful message is shown explaining how to add items. Ensure your user has the role `teacher` in Firestore to see the `+ 상품 추가` button.
+
+## Firestore Index Setup
+
+The admin page's **선행 승인 관리** section queries across all users' `deeds` collections
+filtered by `status` and sorted by `date`. Firestore requires a composite index
+for this query. Create it from the Firebase console under **Firestore
+Database → Indexes** with the following settings:
+
+```
+Collection Group: deeds
+Fields: status (Ascending), date (Ascending)
+```
+
+Once the index is built, reloading the admin page will display the pending deeds
+correctly.
