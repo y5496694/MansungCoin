@@ -1418,6 +1418,7 @@
             case 'auth/email-already-in-use': return '이미 사용 중인 이메일 주소입니다.';
             case 'auth/weak-password': return '비밀번호는 6자 이상이어야 합니다.';
             case 'auth/operation-not-allowed': return '이메일/비밀번호 로그인이 활성화되지 않았습니다.';
+            case 'auth/network-request-failed': return '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.';
             default: return errorCode;
         }
     }
@@ -2125,7 +2126,13 @@
     // --- Store Logic ---
     function renderStoreItems() {
         if (!storeItemsData || storeItemsData.length === 0) {
-            storeItemsContainer.innerHTML = '<p class="text-center text-stone-500">상점이 비어있습니다.</p>';
+            const msg = (currentUserData && currentUserData.role === 'teacher')
+                ? '상점이 비어있습니다. 우측 상단의 "+ 상품 추가" 버튼으로 상품을 등록하세요.'
+                : '상점이 비어있습니다. 나중에 다시 확인해주세요.';
+            storeItemsContainer.innerHTML = `<p class="text-center text-stone-500">${msg}</p>`;
+            if (currentUserData && currentUserData.role === 'teacher') {
+                addStoreItemBtn.classList.remove('hidden');
+            }
             return;
         }
 
