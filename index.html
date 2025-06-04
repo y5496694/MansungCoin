@@ -807,22 +807,28 @@
         targetEl.innerHTML = `<p class="text-stone-500 col-span-full text-center">${type === 'active' ? '진행중인' : '지난'} 경매 물품을 불러오는 중입니다...</p>`;
         
         try {
-            let q;
-            if (type === 'active') {
-                q = query(collection(db, "auctions"), where("status", "==", "active"), orderBy("deadline", "asc"));
-            } else {
-                q = query(collection(db, "auctions"), where("status", "!=", "active"), orderBy("deadline", "desc"));
-            }
+            const q = query(collection(db, "auctions"), orderBy("deadline", "asc"));
             const querySnapshot = await getDocs(q);
             targetEl.innerHTML = '';
 
-            if (querySnapshot.empty) {
+            const items = [];
+            querySnapshot.forEach(docSnap => {
+                const item = { id: docSnap.id, ...docSnap.data() };
+                if ((type === 'active' && item.status === 'active') || (type !== 'active' && item.status !== 'active')) {
+                    items.push(item);
+                }
+            });
+
+            if (items.length === 0) {
                 targetEl.innerHTML = `<p class="text-stone-500 col-span-full text-center">${type === 'active' ? '진행중인' : '지난'} 경매 물품이 없습니다.</p>`;
                 return;
             }
 
-            querySnapshot.forEach(docSnap => {
-                const item = { id: docSnap.id, ...docSnap.data() };
+            if (type !== 'active') {
+                items.sort((a, b) => b.deadline.toDate() - a.deadline.toDate());
+            }
+
+            items.forEach(item => {
                 const itemCard = document.createElement('div');
                 itemCard.className = 'auction-item-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-between';
                 
