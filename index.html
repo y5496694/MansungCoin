@@ -1339,7 +1339,7 @@
         authErrorEl.classList.add('hidden');
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            showSection('dashboard');
+            showSection('dashboard', true);
             loginForm.reset();
         } catch (error) {
             console.warn("Standard login failed, trying temporary password:", error.code);
@@ -1364,7 +1364,7 @@
                                 adminNavLink.classList.remove('hidden');
                                 adminDivider.classList.remove('hidden');
                             }
-                            showSection('dashboard');
+                            showSection('dashboard', true);
                             showInfoModal("임시 비밀번호 로그인 성공", "보안을 위해 즉시 '환경 설정'에서 새 비밀번호로 변경해주세요!");
                             loginForm.reset();
                             return;
