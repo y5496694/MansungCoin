@@ -942,10 +942,10 @@
         }
         adminAuctionItemListEl.innerHTML = '<p class="text-stone-500">경매 물품 목록을 불러오는 중...</p>';
         try {
-            const q = query(collection(db, "auctions"), where("sellerUid", "==", currentAuthUser.uid), orderBy("createdAt", "desc"));
+            const q = query(collection(db, "auctions"), orderBy("createdAt", "desc"));
             const querySnapshot = await getDocs(q);
             adminAuctionItemListEl.innerHTML = '';
-            if (querySnapshot.empty) { adminAuctionItemListEl.innerHTML = '<p class="text-stone-500">등록한 경매 물품이 없습니다.</p>'; return; }
+            if (querySnapshot.empty) { adminAuctionItemListEl.innerHTML = '<p class="text-stone-500">등록된 경매 물품이 없습니다.</p>'; return; }
             
             querySnapshot.forEach(docSnap => {
                 const item = { id: docSnap.id, ...docSnap.data() };
@@ -954,7 +954,7 @@
                 itemDiv.innerHTML = `
                     <div>
                         <p class="font-medium text-indigo-600">${item.itemName} (현재가: ${formatCurrency(item.currentBid)})</p>
-                        <p class="text-xs text-stone-500">마감: ${formatDate(item.deadline)} - 상태: ${item.status}</p>
+                        <p class="text-xs text-stone-500">판매자: ${item.sellerName || "알 수 없음"} | 마감: ${formatDate(item.deadline)} - 상태: ${item.status}</p>
                     </div>
                     <div class="space-x-2">
                         <button data-itemid="${item.id}" class="admin-edit-auction-item-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2 rounded ${item.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''}" ${item.status !== 'active' ? 'disabled' : ''}>수정</button>
