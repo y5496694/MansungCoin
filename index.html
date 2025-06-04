@@ -525,13 +525,19 @@
         }
         adminDeedApprovalListEl.innerHTML = '<p class="text-stone-500">선행 목록을 불러오는 중...</p>';
         try {
-            const q = query(collectionGroup(db, 'deeds'), where('status', 'in', ['pending', 'rewrite']), orderBy('date', 'asc'));
+            const q = query(collectionGroup(db, 'deeds'), orderBy('date', 'asc'));
             const snapshot = await getDocs(q);
             adminDeedApprovalListEl.innerHTML = '';
-            if (snapshot.empty) { adminDeedApprovalListEl.innerHTML = '<p class="text-stone-500">검토할 선행이 없습니다.</p>'; return; }
+            const deedsToShow = [];
             snapshot.forEach(docSnap => {
-                const parentUid = docSnap.ref.parent.parent.id;
-                const deed = { id: docSnap.id, userUid: parentUid, ...docSnap.data() };
+                const data = docSnap.data();
+                if (['pending', 'rewrite'].includes(data.status)) {
+                    const parentUid = docSnap.ref.parent.parent.id;
+                    deedsToShow.push({ id: docSnap.id, userUid: parentUid, ...data });
+                }
+            });
+            if (deedsToShow.length === 0) { adminDeedApprovalListEl.innerHTML = '<p class="text-stone-500">검토할 선행이 없습니다.</p>'; return; }
+            deedsToShow.forEach(deed => {
                 const div = document.createElement('div');
                 div.className = 'bg-stone-50 p-3 rounded-md border border-stone-200 flex justify-between items-start';
                 div.innerHTML = `
