@@ -772,6 +772,7 @@
             switch(status) {
                 case 'ended_sold': return '<span class="text-green-600 font-semibold">낙찰됨</span>';
                 case 'ended_unsold': return '<span class="text-red-600 font-semibold">유찰됨</span>';
+                case 'cancelled': return '<span class="text-stone-600 font-semibold">취소됨</span>';
                 default: return '<span class="text-stone-500 font-semibold">종료됨</span>';
             }
         }
@@ -807,22 +808,28 @@
         targetEl.innerHTML = `<p class="text-stone-500 col-span-full text-center">${type === 'active' ? '진행중인' : '지난'} 경매 물품을 불러오는 중입니다...</p>`;
         
         try {
-            let q;
-            if (type === 'active') {
-                q = query(collection(db, "auctions"), where("status", "==", "active"), orderBy("deadline", "asc"));
-            } else {
-                q = query(collection(db, "auctions"), where("status", "!=", "active"), orderBy("deadline", "desc"));
-            }
+            const q = query(collection(db, "auctions"), orderBy("deadline", "asc"));
             const querySnapshot = await getDocs(q);
             targetEl.innerHTML = '';
 
-            if (querySnapshot.empty) {
+            const items = [];
+            querySnapshot.forEach(docSnap => {
+                const item = { id: docSnap.id, ...docSnap.data() };
+                if ((type === 'active' && item.status === 'active') || (type !== 'active' && item.status !== 'active')) {
+                    items.push(item);
+                }
+            });
+
+            if (items.length === 0) {
                 targetEl.innerHTML = `<p class="text-stone-500 col-span-full text-center">${type === 'active' ? '진행중인' : '지난'} 경매 물품이 없습니다.</p>`;
                 return;
             }
 
-            querySnapshot.forEach(docSnap => {
-                const item = { id: docSnap.id, ...docSnap.data() };
+            if (type !== 'active') {
+                items.sort((a, b) => b.deadline.toDate() - a.deadline.toDate());
+            }
+
+            items.forEach(item => {
                 const itemCard = document.createElement('div');
                 itemCard.className = 'auction-item-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-between';
                 
@@ -848,7 +855,7 @@
                         ${item.status === 'active' ? `
                             <button data-auctionid="${item.id}" data-itemname="${item.itemName}" data-currentbid="${item.currentBid}" class="place-bid-btn w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">입찰하기</button>
                             ${item.highestBidderUid === currentAuthUser.uid ? `<button data-auctionid="${item.id}" class="cancel-bid-btn w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-3 rounded-lg text-sm">내 입찰 취소</button>` : ''}
-                        ` : `<p class="text-center font-semibold ${item.status === 'ended_sold' ? 'text-green-700' : 'text-red-700'}">${item.status === 'ended_sold' ? `낙찰자: ${item.highestBidderName || '정보 없음'}` : '유찰됨'}</p>`}
+                        ` : `<p class="text-center font-semibold ${item.status === 'ended_sold' ? 'text-green-700' : item.status === 'cancelled' ? 'text-stone-700' : 'text-red-700'}">${item.status === 'ended_sold' ? `낙찰자: ${item.highestBidderName || '정보 없음'}` : item.status === 'cancelled' ? '취소됨' : '유찰됨'}</p>`}
                     </div>
                 `;
                 targetEl.appendChild(itemCard);
@@ -936,10 +943,10 @@
         }
         adminAuctionItemListEl.innerHTML = '<p class="text-stone-500">경매 물품 목록을 불러오는 중...</p>';
         try {
-            const q = query(collection(db, "auctions"), where("sellerUid", "==", currentAuthUser.uid), orderBy("createdAt", "desc"));
+            const q = query(collection(db, "auctions"), orderBy("createdAt", "desc"));
             const querySnapshot = await getDocs(q);
             adminAuctionItemListEl.innerHTML = '';
-            if (querySnapshot.empty) { adminAuctionItemListEl.innerHTML = '<p class="text-stone-500">등록한 경매 물품이 없습니다.</p>'; return; }
+            if (querySnapshot.empty) { adminAuctionItemListEl.innerHTML = '<p class="text-stone-500">등록된 경매 물품이 없습니다.</p>'; return; }
             
             querySnapshot.forEach(docSnap => {
                 const item = { id: docSnap.id, ...docSnap.data() };
@@ -948,10 +955,11 @@
                 itemDiv.innerHTML = `
                     <div>
                         <p class="font-medium text-indigo-600">${item.itemName} (현재가: ${formatCurrency(item.currentBid)})</p>
-                        <p class="text-xs text-stone-500">마감: ${formatDate(item.deadline)} - 상태: ${item.status}</p>
+                        <p class="text-xs text-stone-500">판매자: ${item.sellerName || "알 수 없음"} | 마감: ${formatDate(item.deadline)} - 상태: ${item.status}</p>
                     </div>
                     <div class="space-x-2">
                         <button data-itemid="${item.id}" class="admin-edit-auction-item-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2 rounded ${item.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''}" ${item.status !== 'active' ? 'disabled' : ''}>수정</button>
+                        <button data-itemid="${item.id}" class="admin-cancel-auction-item-btn bg-stone-500 hover:bg-stone-600 text-white text-xs py-1 px-2 rounded ${item.status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''}" ${item.status !== 'active' ? 'disabled' : ''}>취소</button>
                         <button data-itemid="${item.id}" class="admin-delete-auction-item-btn bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded">삭제</button>
                     </div>
                 `;
@@ -965,6 +973,44 @@
                     if (itemDoc.exists()) showAuctionItemFormModal({ id: itemDoc.id, ...itemDoc.data() });
                 });
             });
+            document.querySelectorAll('.admin-cancel-auction-item-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const itemId = e.target.dataset.itemid;
+                    if (!confirm('정말로 이 경매를 취소하시겠습니까? 모든 입찰금이 환불됩니다.')) return;
+
+                    try {
+                        const itemRef = doc(db, 'auctions', itemId);
+                        const itemSnap = await getDoc(itemRef);
+                        if (!itemSnap.exists()) { showInfoModal('오류', '경매 정보를 찾을 수 없습니다.'); return; }
+                        const auction = itemSnap.data();
+                        if (auction.status !== 'active') { showInfoModal('오류', '이미 종료되었거나 취소된 경매입니다.'); return; }
+
+                        const batch = writeBatch(db);
+                        const bids = auction.bids || {};
+                        for (const bidderUid in bids) {
+                            const bidData = bids[bidderUid];
+                            const userRef = doc(db, 'users', bidderUid);
+                            batch.update(userRef, { balance: increment(bidData.bidAmount) });
+                            batch.set(doc(collection(userRef, 'transactions')), {
+                                type: 'auction_cancel_refund',
+                                description: `${auction.itemName} 경매 취소 환불`,
+                                amount: bidData.bidAmount,
+                                auctionId: itemId,
+                                itemName: auction.itemName,
+                                date: serverTimestamp()
+                            });
+                        }
+                        batch.update(itemRef, { status: 'cancelled', updatedAt: serverTimestamp() });
+                        await batch.commit();
+                        showInfoModal('성공', '경매가 취소되었습니다.');
+                        loadAdminAuctionItems();
+                    } catch (error) {
+                        console.error('Error cancelling auction:', error);
+                        showInfoModal('오류', '경매 취소 중 오류가 발생했습니다.');
+                    }
+                });
+            });
+
             document.querySelectorAll('.admin-delete-auction-item-btn').forEach(button => {
                 button.addEventListener('click', async (e) => {
                     const itemId = e.target.dataset.itemid;
