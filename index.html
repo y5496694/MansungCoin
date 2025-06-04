@@ -317,6 +317,8 @@
                             <option value="buy">매수</option>
                             <option value="sell">매도</option>
                             <option value="deed">선행보상</option>
+                            <option value="store_purchase">상점구매</option>
+                            <option value="store_sale">상점판매</option>
                         </select>
                     </div>
                     <div class="overflow-x-auto">
@@ -395,9 +397,42 @@
             </section>
 
             <section id="store" class="hidden space-y-6">
-                <h2 class="text-3xl font-semibold text-teal-800">🛒 상점</h2>
-                <p class="text-stone-600">아이템을 구매할 수 있는 상점입니다. (구현 예정)</p>
+                <div class="flex justify-between items-center">
+                    <h2 class="text-3xl font-semibold text-teal-800">🛒 상점</h2>
+                    <button id="addStoreItemBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-1 px-3 rounded-lg text-sm hidden">+ 상품 추가</button>
+                </div>
+                <div id="storeItemsContainer" class="space-y-6"></div>
             </section>
+
+            <div id="storeItemModal" class="post-modal">
+                <div class="post-modal-content">
+                    <span id="closeStoreItemModalBtn" class="close-button">&times;</span>
+                    <h3 id="storeItemModalTitle" class="text-2xl font-bold text-teal-700 mb-4">상품 추가</h3>
+                    <form id="storeItemForm" class="space-y-4">
+                        <div>
+                            <label for="storeItemCategory" class="block text-sm font-medium text-stone-700">카테고리</label>
+                            <input type="text" id="storeItemCategory" required class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm">
+                        </div>
+                        <div>
+                            <label for="storeItemName" class="block text-sm font-medium text-stone-700">이름</label>
+                            <input type="text" id="storeItemName" required class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm">
+                        </div>
+                        <div>
+                            <label for="storeItemPrice" class="block text-sm font-medium text-stone-700">가격(원)</label>
+                            <input type="number" id="storeItemPrice" required min="1" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm">
+                        </div>
+                        <div>
+                            <label for="storeItemImageUrl" class="block text-sm font-medium text-stone-700">이미지 URL</label>
+                            <input type="text" id="storeItemImageUrl" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm">
+                        </div>
+                        <div>
+                            <label for="storeItemSellerEmail" class="block text-sm font-medium text-stone-700">판매자 이메일(계좌)</label>
+                            <input type="email" id="storeItemSellerEmail" required class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm">
+                        </div>
+                        <button type="submit" id="saveStoreItemBtn" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">저장</button>
+                    </form>
+                </div>
+            </div>
 
             <section id="admin" class="hidden space-y-6">
                 <h2 class="text-3xl font-semibold text-red-700">⚙️ 관리자 페이지 (교사용)</h2>
@@ -635,6 +670,8 @@
     let unsubscribeStockListeners = {};
     let unsubscribeNoticePostsListener = null;
     let unsubscribeFreeboardPostsListener = null;
+    let unsubscribeStoreItemsListener = null;
+    let storeItemsData = [];
     let stockUpdateInterval = null;
     const MAX_HISTORY_LENGTH = 200; 
 
@@ -827,6 +864,15 @@
         postEditIdInput.value = '';
     }
 
+    function showStoreItemModal() {
+        storeItemModal.style.display = 'block';
+    }
+
+    function closeStoreItemModal() {
+        storeItemModal.style.display = 'none';
+        storeItemForm.reset();
+    }
+
 
     closeInfoModalBtn.addEventListener('click', closeInfoModal);
     confirmInfoModalBtn.addEventListener('click', closeInfoModal);
@@ -841,6 +887,8 @@
     closeAdminResetPasswordModalBtn.addEventListener('click', closeAdminResetPasswordModal);
     cancelAdminResetPasswordBtn.addEventListener('click', closeAdminResetPasswordModal);
     closePostModalBtn.addEventListener('click', closePostModal);
+    addStoreItemBtn.addEventListener('click', showStoreItemModal);
+    closeStoreItemModalBtn.addEventListener('click', closeStoreItemModal);
 
 
     window.onclick = function(event) {
@@ -864,6 +912,9 @@
         }
         if (event.target == postModal) {
             closePostModal();
+        }
+        if (event.target == storeItemModal) {
+            closeStoreItemModal();
         }
     }
 
@@ -914,6 +965,11 @@
     const freePostListEl = document.getElementById('freePostList');
     const newNoticePostBtn = document.getElementById('newNoticePostBtn');
     const newFreePostBtn = document.getElementById('newFreePostBtn');
+    const storeItemsContainer = document.getElementById('storeItemsContainer');
+    const addStoreItemBtn = document.getElementById('addStoreItemBtn');
+    const storeItemModal = document.getElementById('storeItemModal');
+    const closeStoreItemModalBtn = document.getElementById('closeStoreItemModalBtn');
+    const storeItemForm = document.getElementById('storeItemForm');
 
 
     // --- Navigation ---
@@ -966,9 +1022,10 @@
         if (currentAuthUser) { 
             if (sectionId === 'dashboard') updateDashboardDisplay();
             if (sectionId === 'market') loadAndRenderMarketTabs();
-            if (sectionId === 'board') loadAndRenderBoard('notice'); 
+            if (sectionId === 'board') loadAndRenderBoard('notice');
             if (sectionId === 'transactions') renderTransactions();
             if (sectionId === 'deeds') renderDeeds();
+            if (sectionId === 'store') renderStoreItems();
             if (sectionId === 'settings') loadUserSettings();
             if (sectionId === 'ranking') loadRankingData('totalAsset');
             if (sectionId === 'admin' && currentUserData && currentUserData.role === 'teacher') loadAdminData();
@@ -1208,6 +1265,17 @@
                 renderPosts('freeboard', snapshot);
             }
         });
+
+        const storeQuery = query(collection(db, 'storeItems'));
+        unsubscribeStoreItemsListener = onSnapshot(storeQuery, (snapshot) => {
+            storeItemsData = [];
+            snapshot.forEach(docSnap => {
+                storeItemsData.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            if (document.getElementById('store').classList.contains('hidden') === false) {
+                renderStoreItems();
+            }
+        });
     }
 
     function detachRealtimeListeners() {
@@ -1218,6 +1286,8 @@
         unsubscribeStockListeners = {};
         if (unsubscribeNoticePostsListener) unsubscribeNoticePostsListener();
         if (unsubscribeFreeboardPostsListener) unsubscribeFreeboardPostsListener();
+        if (unsubscribeStoreItemsListener) unsubscribeStoreItemsListener();
+        storeItemsData = [];
     }
 
     // --- Gemini API Call Function ---
@@ -2052,6 +2122,138 @@
         generateTextViaGemini(prompt);
     }
 
+    // --- Store Logic ---
+    function renderStoreItems() {
+        if (!storeItemsData || storeItemsData.length === 0) {
+            storeItemsContainer.innerHTML = '<p class="text-center text-stone-500">상점이 비어있습니다.</p>';
+            return;
+        }
+
+        const grouped = {};
+        storeItemsData.forEach(item => {
+            if (!grouped[item.category]) grouped[item.category] = [];
+            grouped[item.category].push(item);
+        });
+
+        storeItemsContainer.innerHTML = '';
+        Object.keys(grouped).forEach(cat => {
+            const catDiv = document.createElement('div');
+            catDiv.innerHTML = `<h3 class="text-2xl font-semibold text-teal-700 mb-2">${cat}</h3>`;
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4';
+            grouped[cat].forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-lg shadow';
+                card.innerHTML = `
+                    ${item.imageUrl ? `<img src="${item.imageUrl}" alt="${item.name}" class="w-full h-32 object-cover rounded">` : ''}
+                    <h4 class="mt-2 font-semibold">${item.name}</h4>
+                    <p class="text-sm text-stone-500">${formatCurrency(item.price)}</p>
+                    <p class="text-xs text-stone-400">${item.sellerEmail}</p>
+                    <div class="mt-2 flex space-x-2 items-center">
+                        <input type="number" min="1" value="1" class="buy-qty w-16 p-1 border rounded" />
+                        <button data-itemid="${item.id}" class="buy-item-btn bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-sm">구매</button>
+                    </div>`;
+                grid.appendChild(card);
+            });
+            catDiv.appendChild(grid);
+            storeItemsContainer.appendChild(catDiv);
+        });
+
+        if (currentUserData && currentUserData.role === 'teacher') {
+            addStoreItemBtn.classList.remove('hidden');
+        } else {
+            addStoreItemBtn.classList.add('hidden');
+        }
+    }
+
+    async function buyStoreItem(itemId, quantity) {
+        if (!currentAuthUser || !currentUserData) { showInfoModal('오류','로그인이 필요합니다.'); return; }
+        if (quantity <= 0) { showInfoModal('오류','올바른 수량을 입력하세요.'); return; }
+
+        try {
+            const itemRef = doc(db, 'storeItems', itemId);
+            const itemSnap = await getDoc(itemRef);
+            if (!itemSnap.exists()) { showInfoModal('오류','상품을 찾을 수 없습니다.'); return; }
+            const item = itemSnap.data();
+            const totalPrice = item.price * quantity;
+
+            if (currentUserData.balance < totalPrice) { showInfoModal('오류','잔액이 부족합니다.'); return; }
+
+            const q = query(collection(db, 'users'), where('email','==', item.sellerEmail));
+            const sellerSnap = await getDocs(q);
+            if (sellerSnap.empty) { showInfoModal('오류','판매자를 찾을 수 없습니다.'); return; }
+            const sellerDoc = sellerSnap.docs[0];
+
+            await runTransaction(db, async (tr) => {
+                const buyerRef = doc(db, 'users', currentAuthUser.uid);
+                const sellerRef = doc(db, 'users', sellerDoc.id);
+
+                const buyerSnap = await tr.get(buyerRef);
+                if (!buyerSnap.exists() || buyerSnap.data().balance < totalPrice) throw new Error('잔액이 부족합니다.');
+
+                tr.update(buyerRef, { balance: increment(-totalPrice) });
+                tr.update(sellerRef, { balance: increment(totalPrice) });
+
+                const buyerTxRef = collection(db, 'users', currentAuthUser.uid, 'transactions');
+                tr.set(doc(buyerTxRef), {
+                    type: 'store_purchase',
+                    description: `${item.name} ${quantity}개 구매`,
+                    amount: totalPrice,
+                    date: serverTimestamp(),
+                    counterpartyName: sellerDoc.data().name || item.sellerEmail,
+                    counterpartyEmail: item.sellerEmail
+                });
+
+                const sellerTxRef = collection(db, 'users', sellerDoc.id, 'transactions');
+                tr.set(doc(sellerTxRef), {
+                    type: 'store_sale',
+                    description: `${currentUserData.name}가 ${item.name}을 ${quantity}개 구매했어요.`,
+                    amount: totalPrice,
+                    date: serverTimestamp(),
+                    counterpartyName: currentUserData.name,
+                    counterpartyEmail: currentAuthUser.email
+                });
+            });
+
+            showInfoModal('구매 완료', `${item.name} ${quantity}개를 구입했습니다.`);
+        } catch (err) {
+            console.error('Purchase error:', err);
+            showInfoModal('오류', `구매 중 문제가 발생했습니다: ${err.message}`);
+        }
+    }
+
+    storeItemsContainer.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target.classList.contains('buy-item-btn')) {
+            const qtyInput = target.parentElement.querySelector('.buy-qty');
+            const qty = parseInt(qtyInput.value);
+            buyStoreItem(target.dataset.itemid, qty);
+        }
+    });
+
+    storeItemForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentUserData || currentUserData.role !== 'teacher') { showInfoModal('오류','권한이 없습니다.'); return; }
+
+        const category = document.getElementById('storeItemCategory').value.trim();
+        const name = document.getElementById('storeItemName').value.trim();
+        const price = parseInt(document.getElementById('storeItemPrice').value);
+        const imageUrl = document.getElementById('storeItemImageUrl').value.trim();
+        const sellerEmail = document.getElementById('storeItemSellerEmail').value.trim();
+        if (!category || !name || !sellerEmail || isNaN(price) || price <= 0) { showInfoModal('오류','모든 필드를 올바르게 입력하세요.'); return; }
+
+        try {
+            await addDoc(collection(db, 'storeItems'), {
+                category, name, price, imageUrl, sellerEmail, createdAt: serverTimestamp()
+            });
+            showInfoModal('성공','상품이 추가되었습니다.');
+            closeStoreItemModal();
+        } catch (err) {
+            console.error('Add item error:', err);
+            showInfoModal('오류', `상품 추가 중 오류 발생: ${err.message}`);
+        }
+    });
+
     // --- Transactions Logic ---
     function renderTransactions() {
         if (!currentUserData || !currentUserData.transactions) {
@@ -2100,6 +2302,12 @@
                 case 'admin_debit':
                     amountDisplay = `<span class="text-orange-600 font-semibold">-${formatCurrency(tx.amount)}</span>`;
                     break;
+                case 'store_purchase':
+                    amountDisplay = `<span class="text-red-600 font-semibold">-${formatCurrency(tx.amount)}</span>`;
+                    break;
+                case 'store_sale':
+                    amountDisplay = `<span class="text-sky-600 font-semibold">+${formatCurrency(tx.amount)}</span>`;
+                    break;
                 default:
                     amountDisplay = formatCurrency(tx.amount);
             }
@@ -2124,6 +2332,8 @@
             case 'deed': return '선행보상';
             case 'admin_credit': return '관리자 지급';
             case 'admin_debit': return '관리자 회수';
+            case 'store_purchase': return '상점구매';
+            case 'store_sale': return '상점판매';
             default: return type;
         }
     }
