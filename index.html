@@ -473,11 +473,66 @@
         purchaseInfoModal.style.display = 'none';
         shopItemToPurchase = null;
     }
-    async function handleConfirmPurchase() {
+async function handleConfirmPurchase() {
         if (!currentAuthUser || !currentUserData || !shopItemToPurchase) {
             showInfoModal('오류', '구매 정보를 확인할 수 없습니다.');
             return;
+}
+
+    async function handleDirectPurchase(item, qty) {
+        if (!currentAuthUser || !currentUserData) {
+            showInfoModal('오류', '로그인이 필요합니다.');
+            return;
         }
+        if (qty <= 0) { showInfoModal('오류', '올바른 수량을 입력하세요.'); return; }
+        const total = qty * item.price;
+        if (total > currentUserData.balance) { showInfoModal('오류', '잔액이 부족합니다.'); return; }
+        try {
+            const buyerRef = doc(db, 'users', currentAuthUser.uid);
+            const accountRef = doc(db, 'depositAccounts', item.depositAccount);
+            await runTransaction(db, async (tx) => {
+                const buyerSnap = await tx.get(buyerRef);
+                if (!buyerSnap.exists() || buyerSnap.data().balance < total) throw new Error('잔액이 부족합니다. (트랜잭션 확인)');
+                tx.update(buyerRef, { balance: increment(-total) });
+                tx.set(doc(collection(buyerRef, 'transactions')), {
+                    type: 'shop_purchase',
+                    description: `${item.itemName} ${qty}개 구입`,
+                    amount: total,
+                    date: serverTimestamp(),
+                    depositAccount: item.depositAccount
+                });
+                const accountSnap = await tx.get(accountRef);
+                const ownerUid = accountSnap.exists() ? accountSnap.data().ownerUid : null;
+                tx.set(doc(collection(accountRef, 'transactions')), {
+                    message: `${currentUserData.name}가 ${item.itemName}을 ${qty}개 구입하였습니다.`,
+                    amount: total,
+                    date: serverTimestamp(),
+                    buyerUid: currentAuthUser.uid,
+                    buyerName: currentUserData.name,
+                    itemId: item.id
+                });
+                if (ownerUid) {
+                    const ownerRef = doc(db, 'users', ownerUid);
+                    const ownerSnap = await tx.get(ownerRef);
+                    if (ownerSnap.exists()) {
+                        tx.update(ownerRef, { balance: increment(total) });
+                        tx.set(doc(collection(ownerRef, 'transactions')), {
+                            type: 'shop_sale',
+                            description: `${item.itemName} ${qty}개 판매`,
+                            amount: total,
+                            date: serverTimestamp(),
+                            buyerUid: currentAuthUser.uid,
+                            buyerName: currentUserData.name,
+                            itemId: item.id
+                        });
+                    }
+                }
+            });
+            showInfoModal('구매 완료', `${item.itemName} ${qty}개를 ${formatCurrency(total)}에 구입했습니다.`);
+        } catch (error) {
+            showInfoModal('오류', `구매 처리 중 오류가 발생했습니다: ${error.message}`);
+        }
+    }
         const qty = parseInt(purchaseQuantityInput.value) || 1;
         if (qty <= 0) { showInfoModal('오류', '올바른 수량을 입력하세요.'); return; }
         const total = qty * shopItemToPurchase.price;
@@ -967,7 +1022,61 @@
     function renderPosts(boardType, snapshot) { /* ... */ const listEl = boardType === 'notice' ? noticePostListEl : freePostListEl; listEl.innerHTML = ''; if (snapshot.empty) { listEl.innerHTML = `<li class="text-center text-stone-500 py-4">${boardType === 'notice' ? '공지사항이' : '게시글이'} 없습니다.</li>`; return; } snapshot.forEach(docSnap => { const post = { id: docSnap.id, ...docSnap.data() }; const li = document.createElement('li'); li.className = "bg-white p-4 rounded-lg shadow-sm border border-stone-200"; li.innerHTML = `<div class="flex justify-between items-start"><div><h4 class="text-lg font-semibold text-teal-700">${post.title}</h4><p class="text-xs text-stone-500">작성자: ${post.authorName} | 날짜: ${formatDate(post.createdAt)}</p></div>${ (currentUserData && (currentUserData.role === 'teacher' || post.authorUid === currentAuthUser.uid)) ? `<div class="flex space-x-2"><button data-boardtype="${boardType}" data-postid="${post.id}" class="edit-post-btn text-xs bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-2 rounded">수정</button><button data-boardtype="${boardType}" data-postid="${post.id}" class="delete-post-btn text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded">삭제</button></div>` : '' }</div><p class="mt-2 text-stone-700 post-content">${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}</p>${post.content.length > 100 ? `<button data-boardtype="${boardType}" data-postid="${post.id}" class="view-full-post-btn text-xs text-blue-500 hover:underline mt-1">더보기</button>` : ''}`; listEl.appendChild(li); }); listEl.addEventListener('click', async (e) => { const target = e.target; const boardType = target.dataset.boardtype; const postId = target.dataset.postid; if (target.classList.contains('edit-post-btn')) { const postDoc = await getDoc(doc(db, "boards", boardType, "posts", postId)); if (postDoc.exists()) showPostModal(boardType, { id: postDoc.id, ...postDoc.data() }); } else if (target.classList.contains('delete-post-btn')) { if (confirm("정말로 이 글을 삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "boards", boardType, "posts", postId)); showInfoModal("성공", "글이 삭제되었습니다."); } catch (error) { showInfoModal("오류", "글 삭제 중 오류 발생"); }}} else if (target.classList.contains('view-full-post-btn')) { const postDoc = await getDoc(doc(db, "boards", boardType, "posts", postId)); if (postDoc.exists()) { const postData = postDoc.data(); showInfoModal(postData.title, postData.content); }}}); }
 
     // --- Shop Logic ---
-    async function loadAndRenderShopItems() { /* ... */ if (!currentAuthUser) { shopItemListEl.innerHTML = '<p class="text-stone-500 col-span-full text-center">상점 물품을 보려면 로그인이 필요합니다.</p>'; return; } shopItemListEl.innerHTML = '<p class="text-stone-500 col-span-full text-center">상점 물품을 불러오는 중입니다...</p>'; try { const q = query(collection(db, "shopItems"), orderBy("createdAt", "desc")); const querySnapshot = await getDocs(q); shopItemListEl.innerHTML = ''; if (querySnapshot.empty) { shopItemListEl.innerHTML = '<p class="text-stone-500 col-span-full text-center">판매 중인 물품이 아직 없습니다.</p>'; return; } querySnapshot.forEach(docSnap => { const item = { id: docSnap.id, ...docSnap.data() }; const itemCard = document.createElement('div'); itemCard.className = 'shop-item-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-between'; let imageHtml = `<div class="w-full h-40 bg-stone-200 rounded-md flex items-center justify-center mb-3"><span class="text-stone-400 text-sm">이미지 없음</span></div>`; if (item.imageUrl) { imageHtml = `<img src="${item.imageUrl}" alt="${item.itemName}" class="w-full h-40 object-cover rounded-md mb-3" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-40 bg-stone-200 rounded-md flex items-center justify-center mb-3\\'><span class=\\'text-stone-400 text-sm\\'>이미지 로드 실패</span></div>';">`; } itemCard.innerHTML = `<div>${imageHtml}<h4 class="text-xl font-semibold text-purple-700 mb-1">${item.itemName}</h4><p class="text-2xl font-bold text-orange-600 mb-2">${formatCurrency(item.price)}</p><p class="text-sm text-stone-600 mb-3 h-12 overflow-hidden">${item.description || '특별한 설명이 없어요.'}</p></div><button data-itemid="${item.id}" class="view-purchase-info-btn mt-auto w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105">구매 정보 보기</button>`; shopItemListEl.appendChild(itemCard); }); document.querySelectorAll('.view-purchase-info-btn').forEach(button => { button.addEventListener('click', async (e) => { const itemId = e.target.dataset.itemid; const itemDoc = await getDoc(doc(db, "shopItems", itemId)); if (itemDoc.exists()) { showPurchaseInfoModal({ id: itemDoc.id, ...itemDoc.data() }); } else { showInfoModal("오류", "물품 정보를 찾을 수 없습니다."); }}); }); } catch (error) { console.error("Error loading shop items for user:", error); shopItemListEl.innerHTML = '<p class="text-red-500 col-span-full text-center">상점 물품을 불러오는 데 실패했습니다.</p>'; }}
+    async function loadAndRenderShopItems() {
+        if (!currentAuthUser) {
+            shopItemListEl.innerHTML = '<p class="text-stone-500 col-span-full text-center">상점 물품을 보려면 로그인이 필요합니다.</p>';
+            return;
+        }
+        shopItemListEl.innerHTML = '<p class="text-stone-500 col-span-full text-center">상점 물품을 불러오는 중입니다...</p>';
+        try {
+            const q = query(collection(db, "shopItems"), orderBy("createdAt", "desc"));
+            const querySnapshot = await getDocs(q);
+            shopItemListEl.innerHTML = '';
+            if (querySnapshot.empty) {
+                shopItemListEl.innerHTML = '<p class="text-stone-500 col-span-full text-center">판매 중인 물품이 아직 없습니다.</p>';
+                return;
+            }
+            querySnapshot.forEach(docSnap => {
+                const item = { id: docSnap.id, ...docSnap.data() };
+                const itemCard = document.createElement('div');
+                itemCard.className = 'shop-item-card bg-white p-5 rounded-xl shadow-lg flex flex-col justify-between';
+                let imageHtml = `<div class="w-full h-40 bg-stone-200 rounded-md flex items-center justify-center mb-3"><span class="text-stone-400 text-sm">이미지 없음</span></div>`;
+                if (item.imageUrl) {
+                    imageHtml = `<img src="${item.imageUrl}" alt="${item.itemName}" class="w-full h-40 object-cover rounded-md mb-3" onerror="this.parentElement.innerHTML='<div class=\'w-full h-40 bg-stone-200 rounded-md flex items-center justify-center mb-3\'><span class=\'text-stone-400 text-sm\'>이미지 로드 실패</span></div>';">`;
+                }
+                itemCard.innerHTML = `
+                    <div>
+                        ${imageHtml}
+                        <h4 class="text-xl font-semibold text-purple-700 mb-1">${item.itemName}</h4>
+                        <p class="text-2xl font-bold text-orange-600 mb-2">${formatCurrency(item.price)}</p>
+                        <p class="text-sm text-stone-600 mb-3 h-12 overflow-hidden">${item.description || '특별한 설명이 없어요.'}</p>
+                    </div>
+                    <div class="mt-auto flex items-center space-x-2">
+                        <input type="number" min="1" value="1" class="purchase-qty w-20 p-2 border rounded-md">
+                        <button data-itemid="${item.id}" data-itemname="${item.itemName}" data-price="${item.price}" data-deposit="${item.depositAccount}" class="direct-purchase-btn flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105">구매</button>
+                    </div>
+                `;
+                shopItemListEl.appendChild(itemCard);
+            });
+            document.querySelectorAll('.direct-purchase-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const btn = e.target;
+                    const qtyInput = btn.closest('.shop-item-card').querySelector('.purchase-qty');
+                    const qty = parseInt(qtyInput.value) || 1;
+                    const item = {
+                        id: btn.dataset.itemid,
+                        itemName: btn.dataset.itemname,
+                        price: parseFloat(btn.dataset.price),
+                        depositAccount: btn.dataset.deposit
+                    };
+                    handleDirectPurchase(item, qty);
+                });
+            });
+        } catch (error) {
+            console.error("Error loading shop items for user:", error);
+            shopItemListEl.innerHTML = '<p class="text-red-500 col-span-full text-center">상점 물품을 불러오는 데 실패했습니다.</p>';
+        }
+    }
     adminAddNewShopItemBtn.addEventListener('click', () => showShopItemFormModal());
     shopItemForm.addEventListener('submit', async (e) => { /* ... */ e.preventDefault(); if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') { showInfoModal("오류", "물품을 등록/수정할 권한이 없습니다."); return; } const itemId = shopItemEditIdInput.value; const itemName = shopItemNameInput.value.trim(); const price = parseFloat(shopItemPriceInput.value); const depositAccount = shopItemDepositAccountInput.value.trim(); const description = shopItemDescriptionInput.value.trim(); const imageUrl = shopItemImageUrlInput.value.trim(); if (!itemName || isNaN(price) || price < 0 || !depositAccount) { showInfoModal("오류", "물품 이름, 가격, 입금 계좌는 필수 항목입니다."); return; } const itemData = { itemName, price, depositAccount, description: description || "", imageUrl: imageUrl || "", updatedAt: serverTimestamp(), sellerUid: currentAuthUser.uid, sellerName: currentUserData.name }; try { if (itemId) { const itemRef = doc(db, "shopItems", itemId); await updateDoc(itemRef, itemData); showInfoModal("성공", "상점 물품이 수정되었습니다."); } else { itemData.createdAt = serverTimestamp(); await addDoc(collection(db, "shopItems"), itemData); showInfoModal("성공", "새 상점 물품이 등록되었습니다."); } closeShopItemFormModal(); loadAdminShopItems(); } catch (error) { console.error("Error saving shop item:", error); showInfoModal("오류", "상점 물품 저장 중 오류가 발생했습니다."); }});
     async function loadAdminShopItems() { /* ... */ if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') { adminShopItemListEl.innerHTML = '<p class="text-stone-500">상점 물품 관리는 관리자만 가능합니다.</p>'; return; } adminShopItemListEl.innerHTML = '<p class="text-stone-500">상점 물품 목록을 불러오는 중...</p>'; try { const q = query(collection(db, "shopItems"), orderBy("createdAt", "desc")); const querySnapshot = await getDocs(q); adminShopItemListEl.innerHTML = ''; if (querySnapshot.empty) { adminShopItemListEl.innerHTML = '<p class="text-stone-500">등록된 상점 물품이 없습니다.</p>'; return; } querySnapshot.forEach(docSnap => { const item = { id: docSnap.id, ...docSnap.data() }; const itemDiv = document.createElement('div'); itemDiv.className = "bg-stone-50 p-3 rounded-md border border-stone-200 flex justify-between items-center"; itemDiv.innerHTML = `<div><p class="font-medium text-purple-600">${item.itemName} - ${formatCurrency(item.price)}</p><p class="text-xs text-stone-500">계좌: ${item.depositAccount}</p><p class="text-xs text-stone-400">등록자: ${item.sellerName || item.sellerUid.substring(0,8)}</p></div><div class="space-x-2"><button data-itemid="${item.id}" class="admin-edit-shop-item-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2 rounded">수정</button><button data-itemid="${item.id}" class="admin-delete-shop-item-btn bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded">삭제</button></div>`; adminShopItemListEl.appendChild(itemDiv); }); document.querySelectorAll('.admin-edit-shop-item-btn').forEach(button => { button.addEventListener('click', async (e) => { const itemId = e.target.dataset.itemid; const itemDoc = await getDoc(doc(db, "shopItems", itemId)); if (itemDoc.exists()) { showShopItemFormModal({ id: itemDoc.id, ...itemDoc.data() }); }}); }); document.querySelectorAll('.admin-delete-shop-item-btn').forEach(button => { button.addEventListener('click', async (e) => { const itemId = e.target.dataset.itemid; if (confirm("정말로 이 물품을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) { try { await deleteDoc(doc(db, "shopItems", itemId)); showInfoModal("성공", "상점 물품이 삭제되었습니다."); loadAdminShopItems(); } catch (error) { console.error("Error deleting shop item:", error); showInfoModal("오류", "물품 삭제 중 오류 발생."); }}}); }); } catch (error) { console.error("Error loading shop items for admin:", error); adminShopItemListEl.innerHTML = '<p class="text-red-500">상점 물품 목록 로드 실패.</p>'; }}
