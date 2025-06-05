@@ -487,7 +487,17 @@
             const accountRef = doc(db, 'depositAccounts', item.depositAccount);
             await runTransaction(db, async (tx) => {
                 const buyerSnap = await tx.get(buyerRef);
+                const accountSnap = await tx.get(accountRef);
+                const ownerUid = accountSnap.exists() ? accountSnap.data().ownerUid : null;
+                let ownerRef = null;
+                let ownerSnap = null;
+                if (ownerUid) {
+                    ownerRef = doc(db, 'users', ownerUid);
+                    ownerSnap = await tx.get(ownerRef);
+                }
+
                 if (!buyerSnap.exists() || buyerSnap.data().balance < total) throw new Error('잔액이 부족합니다. (트랜잭션 확인)');
+
                 tx.update(buyerRef, { balance: increment(-total) });
                 tx.set(doc(collection(buyerRef, 'transactions')), {
                     type: 'shop_purchase',
@@ -496,8 +506,7 @@
                     date: serverTimestamp(),
                     depositAccount: item.depositAccount
                 });
-                const accountSnap = await tx.get(accountRef);
-                const ownerUid = accountSnap.exists() ? accountSnap.data().ownerUid : null;
+
                 tx.set(doc(collection(accountRef, 'transactions')), {
                     message: `${currentUserData.name}가 ${item.itemName}을 ${qty}개 구입하였습니다.`,
                     amount: total,
@@ -506,21 +515,18 @@
                     buyerName: currentUserData.name,
                     itemId: item.id
                 });
-                if (ownerUid) {
-                    const ownerRef = doc(db, 'users', ownerUid);
-                    const ownerSnap = await tx.get(ownerRef);
-                    if (ownerSnap.exists()) {
-                        tx.update(ownerRef, { balance: increment(total) });
-                        tx.set(doc(collection(ownerRef, 'transactions')), {
-                            type: 'shop_sale',
-                            description: `${item.itemName} ${qty}개 판매`,
-                            amount: total,
-                            date: serverTimestamp(),
-                            buyerUid: currentAuthUser.uid,
-                            buyerName: currentUserData.name,
-                            itemId: item.id
-                        });
-                    }
+
+                if (ownerRef && ownerSnap && ownerSnap.exists()) {
+                    tx.update(ownerRef, { balance: increment(total) });
+                    tx.set(doc(collection(ownerRef, 'transactions')), {
+                        type: 'shop_sale',
+                        description: `${item.itemName} ${qty}개 판매`,
+                        amount: total,
+                        date: serverTimestamp(),
+                        buyerUid: currentAuthUser.uid,
+                        buyerName: currentUserData.name,
+                        itemId: item.id
+                    });
                 }
             });
             showInfoModal('구매 완료', `${item.itemName} ${qty}개를 ${formatCurrency(total)}에 구입했습니다.`);
