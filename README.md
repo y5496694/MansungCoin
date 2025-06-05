@@ -36,3 +36,23 @@ Fields: status (Ascending), date (Ascending)
 
 Once the index is built, reloading the admin page will display the pending deeds
 correctly.
+
+### Auction Cleanup Index
+
+The scheduled auction cleanup queries the `auctions` collection with filters on
+`status` and `deadline`. Firestore requires a composite index for this query as
+well. Create the following index so the app can automatically process ended
+auctions:
+
+```
+Collection: auctions
+Fields: status (Ascending), deadline (Ascending)
+```
+
+## Admin Access Permissions
+
+Even with the index in place, the teacher account must have permission to read
+all students' `deeds` documents. Check your Firestore security rules so that a
+user whose `role` field is `teacher` can read from the `deeds` collection group.
+If this permission is missing, the admin page will show a "permission-denied"
+error when loading the approval list.
