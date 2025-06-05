@@ -473,11 +473,6 @@
         purchaseInfoModal.style.display = 'none';
         shopItemToPurchase = null;
     }
-async function handleConfirmPurchase() {
-        if (!currentAuthUser || !currentUserData || !shopItemToPurchase) {
-            showInfoModal('오류', '구매 정보를 확인할 수 없습니다.');
-            return;
-}
 
     async function handleDirectPurchase(item, qty) {
         if (!currentAuthUser || !currentUserData) {
@@ -533,38 +528,15 @@ async function handleConfirmPurchase() {
             showInfoModal('오류', `구매 처리 중 오류가 발생했습니다: ${error.message}`);
         }
     }
-        const qty = parseInt(purchaseQuantityInput.value) || 1;
-        if (qty <= 0) { showInfoModal('오류', '올바른 수량을 입력하세요.'); return; }
-        const total = qty * shopItemToPurchase.price;
-        if (total > currentUserData.balance) { showInfoModal('오류', '잔액이 부족합니다.'); return; }
-        try {
-            const userRef = doc(db, 'users', currentAuthUser.uid);
-            const accountRef = doc(db, 'depositAccounts', shopItemToPurchase.depositAccount);
-            await runTransaction(db, async (tx) => {
-                const userSnap = await tx.get(userRef);
-                if (!userSnap.exists() || userSnap.data().balance < total) throw new Error('잔액이 부족합니다. (트랜잭션 확인)');
-                tx.update(userRef, { balance: increment(-total) });
-                tx.set(doc(collection(userRef, 'transactions')), {
-                    type: 'shop_purchase',
-                    description: `${shopItemToPurchase.itemName} ${qty}개 구입`,
-                    amount: total,
-                    date: serverTimestamp(),
-                    depositAccount: shopItemToPurchase.depositAccount
-                });
-                tx.set(doc(collection(accountRef, 'transactions')), {
-                    message: `${currentUserData.name}가 ${shopItemToPurchase.itemName}을 ${qty}개 구입하였습니다.`,
-                    amount: total,
-                    date: serverTimestamp(),
-                    buyerUid: currentAuthUser.uid,
-                    buyerName: currentUserData.name,
-                    itemId: shopItemToPurchase.id
-                });
-            });
-            showInfoModal('구매 완료', `${shopItemToPurchase.itemName} ${qty}개를 ${formatCurrency(total)}에 구입했습니다.`);
-            closePurchaseInfoModal();
-        } catch (error) {
-            showInfoModal('오류', `구매 처리 중 오류가 발생했습니다: ${error.message}`);
+
+async function handleConfirmPurchase() {
+        if (!currentAuthUser || !currentUserData || !shopItemToPurchase) {
+            showInfoModal('오류', '구매 정보를 확인할 수 없습니다.');
+            return;
         }
+        const qty = parseInt(purchaseQuantityInput.value) || 1;
+        await handleDirectPurchase(shopItemToPurchase, qty);
+        closePurchaseInfoModal();
     }
     function showAuctionItemFormModal(item = null) {
         if (item) { // Edit mode
