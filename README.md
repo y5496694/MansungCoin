@@ -36,3 +36,11 @@ Fields: status (Ascending), date (Ascending)
 
 Once the index is built, reloading the admin page will display the pending deeds
 correctly.
+
+## Admin Access Permissions
+
+Even with the index in place, the teacher account must have permission to read
+all students' `deeds` documents. Check your Firestore security rules so that a
+user whose `role` field is `teacher` can read from the `deeds` collection group.
+If this permission is missing, the admin page will show a "permission-denied"
+error when loading the approval list.
