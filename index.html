@@ -285,7 +285,7 @@
     <div id="adminResetPasswordModal" class="admin-modal"><div class="admin-modal-content"><span id="closeAdminResetPasswordModalBtn" class="close-button">&times;</span><h3 id="adminResetPasswordModalTitle" class="text-xl font-semibold text-red-600 mb-3">학생 비밀번호 초기화</h3><p id="adminResetPasswordStudentInfo" class="text-sm text-stone-600 mb-3"></p><div><label for="adminNewTemporaryPassword" class="block text-sm font-medium text-stone-700">새 임시 비밀번호</label><input type="text" id="adminNewTemporaryPassword" class="mt-1 block w-full p-2 border border-stone-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500" value="mansung001"></div><p class="text-xs text-stone-500 mt-1">학생에게 이 임시 비밀번호를 전달하고, 로그인 후 즉시 변경하도록 안내해주세요.</p><div class="mt-4 text-right space-x-2"><button id="cancelAdminResetPasswordBtn" class="bg-stone-500 hover:bg-stone-600 text-white font-semibold py-2 px-4 rounded-lg">취소</button><button id="adminConfirmResetPasswordBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">임시 비밀번호로 초기화</button></div></div></div>
     <div id="postModal" class="post-modal"><div class="post-modal-content"><span id="closePostModalBtn" class="close-button">&times;</span><h3 id="postModalTitle" class="text-2xl font-bold text-teal-700 mb-4">글 작성/수정</h3><form id="postForm" class="space-y-4"><input type="hidden" id="postBoardType"><input type="hidden" id="postEditId"><div><label for="postTitleInput" class="block text-sm font-medium text-stone-700">제목</label><input type="text" id="postTitleInput" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg"></div><div><label for="postContentInput" class="block text-sm font-medium text-stone-700">내용</label><textarea id="postContentInput" rows="8" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 text-lg"></textarea></div><div class="text-right"><button type="submit" id="savePostBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">저장</button></div></form></div></div>
     <div id="shopItemFormModal" class="shop-modal"><div class="shop-modal-content"><span id="closeShopItemFormModalBtn" class="close-button">&times;</span><h3 id="shopItemFormModalTitle" class="text-2xl font-bold text-purple-700 mb-4">상점 물품 관리</h3><form id="shopItemForm" class="space-y-4"><input type="hidden" id="shopItemEditId"><div><label for="shopItemName" class="block text-sm font-medium text-stone-700">물품 이름</label><input type="text" id="shopItemName" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 text-lg"></div><div><label for="shopItemPrice" class="block text-sm font-medium text-stone-700">가격 (원)</label><input type="number" id="shopItemPrice" min="0" step="100" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 text-lg"></div><div><label for="shopItemDepositAccount" class="block text-sm font-medium text-stone-700">입금 계좌</label><input type="text" id="shopItemDepositAccount" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 text-lg" placeholder="예: 만승은행 123-456-789 김만승"></div><div><label for="shopItemDescription" class="block text-sm font-medium text-stone-700">물품 설명 (선택)</label><textarea id="shopItemDescription" rows="3" class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 text-lg"></textarea></div><div><label for="shopItemImageUrl" class="block text-sm font-medium text-stone-700">이미지 URL (선택)</label><input type="url" id="shopItemImageUrl" class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 text-lg" placeholder="https://example.com/image.png"></div><div class="text-right"><button type="submit" id="saveShopItemBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg">저장</button></div></form></div></div>
-    <div id="purchaseInfoModal" class="shop-modal"><div class="shop-modal-content"><span id="closePurchaseInfoModalBtn" class="close-button">&times;</span><h3 id="purchaseInfoModalTitle" class="text-2xl font-bold text-orange-600 mb-4">구매 정보</h3><div id="purchaseInfoDetails" class="space-y-3 text-stone-700"><p><strong>물품명:</strong> <span id="purchaseItemName"></span></p><p><strong>가격:</strong> <span id="purchaseItemPrice"></span></p><p><strong>입금 계좌:</strong> <span id="purchaseItemAccount" class="font-semibold text-blue-600"></span></p><p class="mt-4 text-sm text-stone-500">위 계좌로 정확한 금액을 입금하신 후, 선생님께 알려주시면 물품을 받을 수 있습니다.</p></div><div class="mt-6 text-right"><button id="confirmPurchaseInfoModalBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg">확인</button></div></div></div>
+    <div id="purchaseInfoModal" class="shop-modal"><div class="shop-modal-content"><span id="closePurchaseInfoModalBtn" class="close-button">&times;</span><h3 id="purchaseInfoModalTitle" class="text-2xl font-bold text-orange-600 mb-4">구매 정보</h3><div id="purchaseInfoDetails" class="space-y-3 text-stone-700"><p><strong>물품명:</strong> <span id="purchaseItemName"></span></p><p><strong>단가:</strong> <span id="purchaseItemPrice"></span></p><div><label for="purchaseQuantity" class="block text-sm font-medium text-stone-700">수량</label><input type="number" id="purchaseQuantity" min="1" value="1" class="mt-1 block w-full p-2 border border-stone-300 rounded-md"></div><p><strong>총액:</strong> <span id="purchaseItemTotal"></span></p><p><strong>입금 계좌:</strong> <span id="purchaseItemAccount" class="font-semibold text-blue-600"></span></p><p class="mt-4 text-sm text-stone-500">위 계좌로 정확한 금액을 입금하신 후, 선생님께 알려주시면 물품을 받을 수 있습니다.</p></div><div class="mt-6 text-right"><button id="confirmPurchaseInfoModalBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg">구매</button></div></div></div>
     <div id="auctionItemFormModal" class="auction-modal"><div class="auction-modal-content"><span id="closeAuctionItemFormModalBtn" class="close-button">&times;</span><h3 id="auctionItemFormModalTitle" class="text-2xl font-bold text-indigo-700 mb-4">경매 물품 관리</h3><form id="auctionItemForm" class="space-y-4"><input type="hidden" id="auctionItemEditId"><div><label for="auctionItemName" class="block text-sm font-medium text-stone-700">물품 이름</label><input type="text" id="auctionItemName" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg"></div><div><label for="auctionItemStartPrice" class="block text-sm font-medium text-stone-700">경매 시작가 (원)</label><input type="number" id="auctionItemStartPrice" min="0" step="100" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg"></div><div><label for="auctionItemDeadline" class="block text-sm font-medium text-stone-700">경매 마감 기한</label><input type="datetime-local" id="auctionItemDeadline" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg"></div><div><label for="auctionItemDescription" class="block text-sm font-medium text-stone-700">물품 설명 (선택)</label><textarea id="auctionItemDescription" rows="3" class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg"></textarea></div><div><label for="auctionItemImageUrl" class="block text-sm font-medium text-stone-700">이미지 URL (선택)</label><input type="url" id="auctionItemImageUrl" class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg" placeholder="https://example.com/image.png"></div><div class="text-right"><button type="submit" id="saveAuctionItemBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg">저장</button></div></form></div></div>
     <div id="placeBidModal" class="auction-modal"><div class="auction-modal-content"><span id="closePlaceBidModalBtn" class="close-button">&times;</span><h3 id="placeBidModalTitle" class="text-2xl font-bold text-green-600 mb-4">입찰하기</h3><form id="placeBidForm" class="space-y-4"><input type="hidden" id="bidAuctionId"><p class="text-sm text-stone-600">물품명: <strong id="bidItemNameDisplay"></strong></p><p class="text-sm text-stone-600">현재 최고 입찰가: <strong id="currentHighestBidDisplay"></strong></p><div><label for="bidAmount" class="block text-sm font-medium text-stone-700">입찰 금액 (원)</label><input type="number" id="bidAmount" min="0" step="100" required class="mt-1 block w-full p-3 border border-stone-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 text-lg"></div><p class="text-xs text-stone-500">입찰 금액은 현재 최고 입찰가보다 높아야 합니다.</p><div class="text-right"><button type="submit" id="confirmPlaceBidBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">입찰</button></div></form></div></div>
 
@@ -330,6 +330,7 @@
     let stockUpdateInterval = null;
     const MAX_HISTORY_LENGTH = 200; 
     let auctionCountdownIntervals = {};
+    let shopItemToPurchase = null;
 
 
     // --- Chart Instances ---
@@ -417,6 +418,8 @@
     const purchaseInfoModalTitle = document.getElementById('purchaseInfoModalTitle');
     const purchaseItemNameEl = document.getElementById('purchaseItemName');
     const purchaseItemPriceEl = document.getElementById('purchaseItemPrice');
+    const purchaseQuantityInput = document.getElementById('purchaseQuantity');
+    const purchaseItemTotalEl = document.getElementById('purchaseItemTotal');
     const purchaseItemAccountEl = document.getElementById('purchaseItemAccount');
     const closePurchaseInfoModalBtn = document.getElementById('closePurchaseInfoModalBtn');
     const confirmPurchaseInfoModalBtn = document.getElementById('confirmPurchaseInfoModalBtn');
@@ -457,8 +460,57 @@
     function closePostModal() { postModal.style.display = 'none'; postForm.reset(); postEditIdInput.value = ''; }
     function showShopItemFormModal(item = null) { /* ... */ if (item) { shopItemFormModalTitle.textContent = "상점 물품 수정"; shopItemEditIdInput.value = item.id; shopItemNameInput.value = item.itemName; shopItemPriceInput.value = item.price; shopItemDepositAccountInput.value = item.depositAccount; shopItemDescriptionInput.value = item.description || ""; shopItemImageUrlInput.value = item.imageUrl || ""; } else { shopItemFormModalTitle.textContent = "새 상점 물품 등록"; shopItemForm.reset(); shopItemEditIdInput.value = ""; } shopItemFormModal.style.display = 'block'; }
     function closeShopItemFormModal() { shopItemFormModal.style.display = 'none'; }
-    function showPurchaseInfoModal(item) { /* ... */ purchaseItemNameEl.textContent = item.itemName; purchaseItemPriceEl.textContent = formatCurrency(item.price); purchaseItemAccountEl.textContent = item.depositAccount; purchaseInfoModal.style.display = 'block'; }
-    function closePurchaseInfoModal() { purchaseInfoModal.style.display = 'none'; }
+    function showPurchaseInfoModal(item) {
+        shopItemToPurchase = item;
+        purchaseItemNameEl.textContent = item.itemName;
+        purchaseItemPriceEl.textContent = formatCurrency(item.price);
+        purchaseQuantityInput.value = 1;
+        purchaseItemTotalEl.textContent = formatCurrency(item.price);
+        purchaseItemAccountEl.textContent = item.depositAccount;
+        purchaseInfoModal.style.display = 'block';
+    }
+    function closePurchaseInfoModal() {
+        purchaseInfoModal.style.display = 'none';
+        shopItemToPurchase = null;
+    }
+    async function handleConfirmPurchase() {
+        if (!currentAuthUser || !currentUserData || !shopItemToPurchase) {
+            showInfoModal('오류', '구매 정보를 확인할 수 없습니다.');
+            return;
+        }
+        const qty = parseInt(purchaseQuantityInput.value) || 1;
+        if (qty <= 0) { showInfoModal('오류', '올바른 수량을 입력하세요.'); return; }
+        const total = qty * shopItemToPurchase.price;
+        if (total > currentUserData.balance) { showInfoModal('오류', '잔액이 부족합니다.'); return; }
+        try {
+            const userRef = doc(db, 'users', currentAuthUser.uid);
+            const accountRef = doc(db, 'depositAccounts', shopItemToPurchase.depositAccount);
+            await runTransaction(db, async (tx) => {
+                const userSnap = await tx.get(userRef);
+                if (!userSnap.exists() || userSnap.data().balance < total) throw new Error('잔액이 부족합니다. (트랜잭션 확인)');
+                tx.update(userRef, { balance: increment(-total) });
+                tx.set(doc(collection(userRef, 'transactions')), {
+                    type: 'shop_purchase',
+                    description: `${shopItemToPurchase.itemName} ${qty}개 구입`,
+                    amount: total,
+                    date: serverTimestamp(),
+                    depositAccount: shopItemToPurchase.depositAccount
+                });
+                tx.set(doc(collection(accountRef, 'transactions')), {
+                    message: `${currentUserData.name}가 ${shopItemToPurchase.itemName}을 ${qty}개 구입하였습니다.`,
+                    amount: total,
+                    date: serverTimestamp(),
+                    buyerUid: currentAuthUser.uid,
+                    buyerName: currentUserData.name,
+                    itemId: shopItemToPurchase.id
+                });
+            });
+            showInfoModal('구매 완료', `${shopItemToPurchase.itemName} ${qty}개를 ${formatCurrency(total)}에 구입했습니다.`);
+            closePurchaseInfoModal();
+        } catch (error) {
+            showInfoModal('오류', `구매 처리 중 오류가 발생했습니다: ${error.message}`);
+        }
+    }
     function showAuctionItemFormModal(item = null) {
         if (item) { // Edit mode
             auctionItemFormModalTitle.textContent = "경매 물품 수정";
@@ -501,7 +553,11 @@
     closePostModalBtn.addEventListener('click', closePostModal);
     closeShopItemFormModalBtn.addEventListener('click', closeShopItemFormModal);
     closePurchaseInfoModalBtn.addEventListener('click', closePurchaseInfoModal);
-    confirmPurchaseInfoModalBtn.addEventListener('click', closePurchaseInfoModal);
+    purchaseQuantityInput.addEventListener('input', () => {
+        const qty = parseInt(purchaseQuantityInput.value) || 1;
+        if (shopItemToPurchase) purchaseItemTotalEl.textContent = formatCurrency(qty * shopItemToPurchase.price);
+    });
+    confirmPurchaseInfoModalBtn.addEventListener('click', handleConfirmPurchase);
     closeAuctionItemFormModalBtn.addEventListener('click', closeAuctionItemFormModal);
     closePlaceBidModalBtn.addEventListener('click', closePlaceBidModal);
 
