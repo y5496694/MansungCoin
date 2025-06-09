@@ -335,6 +335,7 @@
     const MAX_HISTORY_LENGTH = 200; 
     let auctionCountdownIntervals = {};
     let shopItemToPurchase = null;
+    let userNameCache = {};
 
 
     // --- Chart Instances ---
@@ -1073,15 +1074,34 @@ async function handleConfirmPurchase() {
             const q = query(collectionGroup(db, 'transactions'), where('type', '==', 'shop_purchase'), orderBy('date', 'desc'));
             const snapshot = await getDocs(q);
             adminPurchaseListEl.innerHTML = '';
-            if (snapshot.empty) { adminPurchaseListEl.innerHTML = '<p class="text-stone-500">최근 구매가 없습니다.</p>'; return; }
+            if (snapshot.empty) {
+                adminPurchaseListEl.innerHTML = '<p class="text-stone-500">최근 구매가 없습니다.</p>';
+                return;
+            }
+            const transactions = [];
             snapshot.forEach(docSnap => {
                 const parentUid = docSnap.ref.parent.parent.id;
-                const txn = { id: docSnap.id, userUid: parentUid, ...docSnap.data() };
+                transactions.push({ id: docSnap.id, userUid: parentUid, ...docSnap.data() });
+            });
+            for (const txn of transactions) {
+                if (!txn.buyerName) {
+                    if (userNameCache[txn.userUid]) {
+                        txn.buyerName = userNameCache[txn.userUid];
+                    } else {
+                        try {
+                            const userDoc = await getDoc(doc(db, 'users', txn.userUid));
+                            txn.buyerName = userDoc.exists() ? (userDoc.data().name || txn.userUid) : txn.userUid;
+                        } catch (e) {
+                            txn.buyerName = txn.userUid;
+                        }
+                        userNameCache[txn.userUid] = txn.buyerName;
+                    }
+                }
                 const div = document.createElement('div');
                 div.className = 'bg-stone-50 p-3 rounded-md border border-stone-200 flex justify-between items-start';
-                div.innerHTML = `<div><p class="font-medium">${txn.buyerName || txn.userUid}</p><p class="text-sm text-stone-700">${txn.description}</p><p class="text-xs text-stone-500">${formatDate(txn.date)} - ${formatCurrency(txn.amount)}</p></div>`;
+                div.innerHTML = `<div><p class="font-medium">${txn.buyerName}</p><p class="text-sm text-stone-700">${txn.description}</p><p class="text-xs text-stone-500">${formatDate(txn.date)} - ${formatCurrency(txn.amount)}</p></div>`;
                 adminPurchaseListEl.appendChild(div);
-            });
+            }
         } catch (error) {
             console.error('Error loading purchases for admin:', error);
             adminPurchaseListEl.innerHTML = '<p class="text-red-500">구매 내역 로드 실패.</p>';
