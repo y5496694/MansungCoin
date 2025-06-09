@@ -34,13 +34,20 @@ Collection Group: deeds
 Fields: status (Ascending), date (Ascending)
 ```
 
+For the **상점 구매 내역** admin section, create an additional index:
+
+```
+Collection Group: transactions
+Fields: type (Ascending), date (Descending)
+```
+
 Once the index is built, reloading the admin page will display the pending deeds
 correctly.
 
 ## Admin Access Permissions
 
-Even with the index in place, the teacher account must have permission to read
-all students' `deeds` documents. Check your Firestore security rules so that a
-user whose `role` field is `teacher` can read from the `deeds` collection group.
+Even with the indexes in place, the teacher account must have permission to read
+all students' `deeds` and `transactions` documents. Check your Firestore security rules so that a
+user whose `role` field is `teacher` can read from the `deeds` and `transactions` collection groups.
 If this permission is missing, the admin page will show a "permission-denied"
-error when loading the approval list.
+error when loading the approval lists.
