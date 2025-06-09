@@ -860,8 +860,8 @@ async function handleConfirmPurchase() {
     }
 
     // --- Gemini API Call Function ---
-    async function generateTextViaGemini(prompt) { /* ... */ 
-        showAiModal("✨ AI가 열심히 생각하고 있어요..."); const apiKey = ""; const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`; const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+    async function generateTextViaGemini(prompt) { /* ... */
+        showAiModal("✨ AI가 열심히 생각하고 있어요..."); const apiKey = "AIzaSyC7_Gq4LIVVMv0hMD6qSwcTlGJcDSt-KgI"; const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`; const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
         try { const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) { let errorDetails = `API 요청 실패 (상태 코드: ${response.status})`; try { const errorResult = await response.json(); if (errorResult.error?.message) errorDetails += ` - ${errorResult.error.message}`; } catch (e) { /* Ignore */ } throw new Error(errorDetails); } const result = await response.json(); if (result.candidates?.[0]?.content?.parts?.[0]?.text) { updateAiModalContent(result.candidates[0].content.parts[0].text); } else { updateAiModalContent("AI가 응답을 생성하는 데 실패했어요. 응답 형식이 올바르지 않아요."); }} catch (error) { updateAiModalContent(`AI와 연결하는 데 문제가 발생했어요: ${error.message}.`); }
     }
 
