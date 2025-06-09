@@ -85,6 +85,7 @@
                 <a href="#" data-section="deeds" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors"><span>🌟</span><span>나의 선행</span></a>
                 <a href="#" data-section="transactions" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors"><span>🧾</span><span>거래 내역</span></a>
                 <a href="#" data-section="ranking" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors"><span>🏆</span><span>랭킹</span></a>
+                <a href="#" data-section="aiChat" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors"><span>💬</span><span>AI 챗</span></a>
                 <hr class="border-teal-500">
                 <a href="#" data-section="settings" class="nav-link flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-teal-600 transition-colors"><span>🔧</span><span>환경 설정</span></a>
                 <hr id="adminDivider" class="border-teal-500 hidden">
@@ -240,6 +241,17 @@
                     <div class="border-b border-stone-200 mb-4"><nav class="-mb-px flex space-x-8" aria-label="RankingTabs"><button data-rankingtype="totalAsset" class="ranking-tab-button active py-3 px-1 border-b-2 border-teal-600 text-teal-600 whitespace-nowrap text-sm font-medium">총 자산 랭킹</button><button data-rankingtype="roi" class="ranking-tab-button py-3 px-1 border-b-2 border-transparent text-stone-500 hover:text-teal-600 hover:border-teal-600 whitespace-nowrap text-sm font-medium">수익률 랭킹</button></nav></div>
                     <div id="rankingContentTotalAsset" class="ranking-content-area"><h3 class="text-xl font-semibold text-teal-700 mb-2">💰 총 자산 TOP 10</h3><ul id="totalAssetRankingList" class="space-y-2"><li class="text-center text-stone-500 py-4">랭킹 정보를 불러오는 중입니다...</li></ul></div>
                     <div id="rankingContentRoi" class="ranking-content-area hidden"><h3 class="text-xl font-semibold text-teal-700 mb-2">📈 수익률 TOP 10</h3><ul id="roiRankingList" class="space-y-2"><li class="text-center text-stone-500 py-4">수익률 랭킹을 불러오는 중입니다...</li></ul></div>
+                </div>
+            </section>
+
+            <section id="aiChat" class="hidden space-y-6 max-w-lg mx-auto">
+                <h2 class="text-3xl font-semibold text-purple-700">💬 AI 챗</h2>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div id="chatMessages" class="space-y-2 max-h-80 overflow-y-auto text-sm mb-4"></div>
+                    <form id="chatForm" class="flex space-x-2">
+                        <input type="text" id="chatInput" class="flex-grow border p-2 rounded-md" placeholder="고민이나 질문을 입력하세요" required>
+                        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-4 rounded-md">전송</button>
+                    </form>
                 </div>
             </section>
 
@@ -747,6 +759,10 @@ async function handleConfirmPurchase() {
     const adminAddNewShopItemBtn = document.getElementById('adminAddNewShopItemBtn');
     const adminDeedApprovalListEl = document.getElementById('adminDeedApprovalList');
     const adminPurchaseListEl = document.getElementById('adminPurchaseList');
+    // AI Chat DOM Elements
+    const chatMessagesEl = document.getElementById('chatMessages');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
     // Auction DOM Elements
     const auctionTabButtons = document.querySelectorAll('.auction-tab-button');
     const auctionContentActiveEl = document.getElementById('auctionContentActive');
@@ -971,6 +987,44 @@ async function handleConfirmPurchase() {
         } catch (error) {
             showInfoModal('오류', '선행 수정 중 오류가 발생했습니다.');
         }
+    }
+
+    // --- AI Chat Logic ---
+    function appendChatMessage(role, text) {
+        const div = document.createElement('div');
+        div.className = role === 'user'
+            ? 'self-end bg-blue-100 text-sm p-2 rounded-lg max-w-xs'
+            : 'self-start bg-purple-100 text-sm p-2 rounded-lg max-w-xs';
+        div.textContent = text;
+        chatMessagesEl.appendChild(div);
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    }
+
+    async function generateChatReply(message) {
+        const apiKey = "AIzaSyC7_Gq4LIVVMv0hMD6qSwcTlGJcDSt-KgI";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const payload = { contents: [{ role: 'user', parts: [{ text: message }] }] };
+        try {
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error(`API 요청 실패 (상태 코드: ${response.status})`);
+            const result = await response.json();
+            return result.candidates?.[0]?.content?.parts?.[0]?.text || 'AI 응답을 생성하지 못했어요.';
+        } catch (error) {
+            return `AI 오류: ${error.message}`;
+        }
+    }
+
+    if (chatForm) {
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userMsg = chatInput.value.trim();
+            if (!userMsg) return;
+            appendChatMessage('user', userMsg);
+            chatInput.value = '';
+            const prompt = `너는 고민을 들어주고 힘을 주는 친구야. 다음 사용자의 고민이나 질문에 대해 따뜻하게 응원하며 답변해 줘. 사용자의 내용: "${userMsg}"`;
+            const reply = await generateChatReply(prompt);
+            appendChatMessage('ai', reply);
+        });
     }
 
     // --- Transactions Logic ---
