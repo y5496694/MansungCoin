@@ -260,6 +260,10 @@
                     <div class="bg-white p-6 rounded-xl shadow-lg md:col-span-2 lg:col-span-2">
                         <h3 class="text-xl font-semibold text-indigo-600 mb-2">🏛️ 경매 물품 관리</h3><button id="adminAddNewAuctionItemBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg text-sm mb-4">새 경매물품 등록</button><div id="adminAuctionItemList" class="space-y-3 max-h-96 overflow-y-auto"><p class="text-stone-500">경매 물품 목록을 불러오는 중...</p></div>
                     </div>
+                    <div class="bg-white p-6 rounded-xl shadow-lg md:col-span-3">
+                        <h3 class="text-xl font-semibold text-orange-600 mb-2">상점 구매 내역</h3>
+                        <div id="adminPurchaseList" class="space-y-3 max-h-96 overflow-y-auto"><p class="text-stone-500">구매 내역을 불러오는 중...</p></div>
+                    </div>
                 </div>
             </section>
             
@@ -741,6 +745,7 @@ async function handleConfirmPurchase() {
     const adminShopItemListEl = document.getElementById('adminShopItemList');
     const adminAddNewShopItemBtn = document.getElementById('adminAddNewShopItemBtn');
     const adminDeedApprovalListEl = document.getElementById('adminDeedApprovalList');
+    const adminPurchaseListEl = document.getElementById('adminPurchaseList');
     // Auction DOM Elements
     const auctionTabButtons = document.querySelectorAll('.auction-tab-button');
     const auctionContentActiveEl = document.getElementById('auctionContentActive');
@@ -771,7 +776,7 @@ async function handleConfirmPurchase() {
             if (sectionId === 'deeds') renderDeeds();
             if (sectionId === 'settings') loadUserSettings();
             if (sectionId === 'ranking') loadRankingData('totalAsset');
-            if (sectionId === 'admin' && currentUserData && currentUserData.role === 'teacher') { loadAdminData(); loadAdminDeeds(); loadAdminShopItems(); loadAdminAuctionItems(); }
+            if (sectionId === 'admin' && currentUserData && currentUserData.role === 'teacher') { loadAdminData(); loadAdminDeeds(); loadAdminShopItems(); loadAdminAuctionItems(); loadAdminPurchases(); }
         }
     }
     document.getElementById('switchToRegister').addEventListener('click', (e) => { e.preventDefault(); showSection('register', true); });
@@ -1057,6 +1062,31 @@ async function handleConfirmPurchase() {
     }
     adminAddNewShopItemBtn.addEventListener('click', () => showShopItemFormModal());
     shopItemForm.addEventListener('submit', async (e) => { /* ... */ e.preventDefault(); if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') { showInfoModal("오류", "물품을 등록/수정할 권한이 없습니다."); return; } const itemId = shopItemEditIdInput.value; const itemName = shopItemNameInput.value.trim(); const price = parseFloat(shopItemPriceInput.value); const depositAccount = shopItemDepositAccountInput.value.trim(); const description = shopItemDescriptionInput.value.trim(); const imageUrl = shopItemImageUrlInput.value.trim(); if (!itemName || isNaN(price) || price < 0 || !depositAccount) { showInfoModal("오류", "물품 이름, 가격, 입금 계좌는 필수 항목입니다."); return; } const itemData = { itemName, price, depositAccount, description: description || "", imageUrl: imageUrl || "", updatedAt: serverTimestamp(), sellerUid: currentAuthUser.uid, sellerName: currentUserData.name }; try { if (itemId) { const itemRef = doc(db, "shopItems", itemId); await updateDoc(itemRef, itemData); showInfoModal("성공", "상점 물품이 수정되었습니다."); } else { itemData.createdAt = serverTimestamp(); await addDoc(collection(db, "shopItems"), itemData); showInfoModal("성공", "새 상점 물품이 등록되었습니다."); } closeShopItemFormModal(); loadAdminShopItems(); } catch (error) { console.error("Error saving shop item:", error); showInfoModal("오류", "상점 물품 저장 중 오류가 발생했습니다."); }});
+
+    async function loadAdminPurchases() {
+        if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') {
+            adminPurchaseListEl.innerHTML = '<p class="text-stone-500">구매 내역은 관리자만 볼 수 있습니다.</p>';
+            return;
+        }
+        adminPurchaseListEl.innerHTML = '<p class="text-stone-500">구매 내역을 불러오는 중...</p>';
+        try {
+            const q = query(collectionGroup(db, 'transactions'), where('type', '==', 'shop_purchase'), orderBy('date', 'desc'));
+            const snapshot = await getDocs(q);
+            adminPurchaseListEl.innerHTML = '';
+            if (snapshot.empty) { adminPurchaseListEl.innerHTML = '<p class="text-stone-500">최근 구매가 없습니다.</p>'; return; }
+            snapshot.forEach(docSnap => {
+                const parentUid = docSnap.ref.parent.parent.id;
+                const txn = { id: docSnap.id, userUid: parentUid, ...docSnap.data() };
+                const div = document.createElement('div');
+                div.className = 'bg-stone-50 p-3 rounded-md border border-stone-200 flex justify-between items-start';
+                div.innerHTML = `<div><p class="font-medium">${txn.buyerName || txn.userUid}</p><p class="text-sm text-stone-700">${txn.description}</p><p class="text-xs text-stone-500">${formatDate(txn.date)} - ${formatCurrency(txn.amount)}</p></div>`;
+                adminPurchaseListEl.appendChild(div);
+            });
+        } catch (error) {
+            console.error('Error loading purchases for admin:', error);
+            adminPurchaseListEl.innerHTML = '<p class="text-red-500">구매 내역 로드 실패.</p>';
+        }
+    }
     async function loadAdminShopItems() { /* ... */ if (!currentAuthUser || !currentUserData || currentUserData.role !== 'teacher') { adminShopItemListEl.innerHTML = '<p class="text-stone-500">상점 물품 관리는 관리자만 가능합니다.</p>'; return; } adminShopItemListEl.innerHTML = '<p class="text-stone-500">상점 물품 목록을 불러오는 중...</p>'; try { const q = query(collection(db, "shopItems"), orderBy("createdAt", "desc")); const querySnapshot = await getDocs(q); adminShopItemListEl.innerHTML = ''; if (querySnapshot.empty) { adminShopItemListEl.innerHTML = '<p class="text-stone-500">등록된 상점 물품이 없습니다.</p>'; return; } querySnapshot.forEach(docSnap => { const item = { id: docSnap.id, ...docSnap.data() }; const itemDiv = document.createElement('div'); itemDiv.className = "bg-stone-50 p-3 rounded-md border border-stone-200 flex justify-between items-center"; itemDiv.innerHTML = `<div><p class="font-medium text-purple-600">${item.itemName} - ${formatCurrency(item.price)}</p><p class="text-xs text-stone-500">계좌: ${item.depositAccount}</p><p class="text-xs text-stone-400">등록자: ${item.sellerName || item.sellerUid.substring(0,8)}</p></div><div class="space-x-2"><button data-itemid="${item.id}" class="admin-edit-shop-item-btn bg-yellow-500 hover:bg-yellow-600 text-white text-xs py-1 px-2 rounded">수정</button><button data-itemid="${item.id}" class="admin-delete-shop-item-btn bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded">삭제</button></div>`; adminShopItemListEl.appendChild(itemDiv); }); document.querySelectorAll('.admin-edit-shop-item-btn').forEach(button => { button.addEventListener('click', async (e) => { const itemId = e.target.dataset.itemid; const itemDoc = await getDoc(doc(db, "shopItems", itemId)); if (itemDoc.exists()) { showShopItemFormModal({ id: itemDoc.id, ...itemDoc.data() }); }}); }); document.querySelectorAll('.admin-delete-shop-item-btn').forEach(button => { button.addEventListener('click', async (e) => { const itemId = e.target.dataset.itemid; if (confirm("정말로 이 물품을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) { try { await deleteDoc(doc(db, "shopItems", itemId)); showInfoModal("성공", "상점 물품이 삭제되었습니다."); loadAdminShopItems(); } catch (error) { console.error("Error deleting shop item:", error); showInfoModal("오류", "물품 삭제 중 오류 발생."); }}}); }); } catch (error) { console.error("Error loading shop items for admin:", error); adminShopItemListEl.innerHTML = '<p class="text-red-500">상점 물품 목록 로드 실패.</p>'; }}
 
     // --- Auction Logic ---
